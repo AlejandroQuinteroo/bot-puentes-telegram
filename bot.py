@@ -18,6 +18,7 @@ def cargar_csv_drive(csv_url):
             response = requests.get(csv_url)
             response.raise_for_status()
             cache["df"] = pd.read_csv(io.StringIO(response.content.decode('utf-8')))
+            cache["df"]["Puente_normalizado"] = cache["df"]["Puente"].astype(str).str.strip().str.lower()
             cache["last_update"] = ahora
         except Exception as e:
             print(f"Error al cargar el CSV: {e}")
@@ -30,59 +31,66 @@ if BOT_TOKEN is None:
     print("Error: No se encontró la variable de entorno BOT_TOKEN")
     exit(1)
 
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("¡Hola! Escribe: /avance puente X o simplemente 'avance puente X'")
+    await update.message.reply_text("¡Hola! Puedes escribir:\n/avance puente 10\n/avance mina de yeso\nO también escribir: avance san lázaro")
 
+# /avance ...
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) >= 2 and context.args[0].lower() == "puente":
-        num_puente = context.args[1]
-        nombre_puente = f"puente {num_puente}".lower()
+    if context.args:
+        nombre_usuario = " ".join(context.args).strip().lower()
 
         df = cargar_csv_drive(CSV_URL)
         if df.empty:
             await update.message.reply_text("Error al cargar los datos.")
             return
 
-        if "Puente" in df.columns and "Avance (%)" in df.columns:
-            fila = df[df["Puente"].str.strip().str.lower() == nombre_puente]
-            if not fila.empty:
-                avance = fila.iloc[0]["Avance (%)"]
-                await update.message.reply_text(f"El avance de {nombre_puente.title()} es {avance}%")
-            else:
-                await update.message.reply_text(f"No encontré información para {nombre_puente.title()}")
+        fila = df[df["Puente_normalizado"] == nombre_usuario]
+        if not fila.empty:
+            nombre_real = fila.iloc[0]["Puente"]
+            avance = fila.iloc[0]["Avance (%)"]
+            await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
-            await update.message.reply_text("Las columnas necesarias no están en el archivo.")
+            await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
     else:
-        await update.message.reply_text("Usa: /avance puente X")
+        await update.message.reply_text("Usa: /avance nombre del puente")
 
+# Texto libre: "avance puente 10", "avance mina de yeso", etc.
 async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text.lower().strip()
-    if texto.startswith("avance puente "):
-        partes = texto.split()
-        if len(partes) == 3:
-            num_puente = partes[2]
-            nombre_puente = f"puente {num_puente}"
+    if texto.startswith("avance"):
+        nombre_usuario = texto.replace("avance", "").strip()
 
-            df = cargar_csv_drive(CSV_URL)
-            if df.empty:
-                await update.message.reply_text("Error al cargar los datos.")
-                return
+        df = cargar_csv_drive(CSV_URL)
+        if df.empty:
+            await update.message.reply_text("Error al cargar los datos.")
+            return
 
-            if "Puente" in df.columns and "Avance (%)" in df.columns:
-                fila = df[df["Puente"].str.strip().str.lower() == nombre_puente.lower()]
-                if not fila.empty:
-                    avance = fila.iloc[0]["Avance (%)"]
-                    await update.message.reply_text(f"El avance de {nombre_puente.title()} es {avance}")
-                else:
-                    await update.message.reply_text(f"No encontré información para {nombre_puente.title()}")
-            else:
-                await update.message.reply_text("Las columnas necesarias no están en el archivo.")
+        fila = df[df["Puente_normalizado"] == nombre_usuario]
+        if not fila.empty:
+            nombre_real = fila.iloc[0]["Puente"]
+            avance = fila.iloc[0]["Avance (%)"]
+            await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
-            await update.message.reply_text("Usa: avance puente X")
+            await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
+# Opcional: comando /puentes para listar disponibles
+async def listar_puentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    df = cargar_csv_drive(CSV_URL)
+    if df.empty:
+        await update.message.reply_text("Error al cargar los datos.")
+        return
+    puentes = sorted(df["Puente"].dropna().unique())
+    texto = "Puentes disponibles:\n" + "\n".join(f"• {p}" for p in puentes)
+    await update.message.reply_text(texto)
+
+# Lanzamiento del bot
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("avance", avance))
+    app.add_handler(CommandHandler("puentes", listar_puentes))  # opcional
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
+
     app.run_polling()
