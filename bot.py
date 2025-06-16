@@ -1,20 +1,15 @@
-
-#from dotenv import load_dotenv
-#import os
-
-#load_dotenv()  # Esto carga las variables del archivo .env
-
+# bot.py
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import pandas as pd
 import requests
 import io
 import os
 
-# URL pública CSV de tu Google Sheets
+# URL pública CSV de Google Sheets
 CSV_URL = "https://docs.google.com/spreadsheets/d/1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw/export?format=csv&id=1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw&gid=0"
 
-# Función para cargar CSV desde Google Sheets
+# Cargar CSV desde Google Sheets
 def cargar_csv_drive(csv_url):
     try:
         response = requests.get(csv_url)
@@ -22,9 +17,9 @@ def cargar_csv_drive(csv_url):
         return pd.read_csv(io.StringIO(response.content.decode('utf-8')))
     except Exception as e:
         print(f"Error al cargar el CSV: {e}")
-        return pd.DataFrame()  # Retorna DataFrame vacío en caso de error
+        return pd.DataFrame()
 
-#BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("¡Hola! Escribe: /avance puente X")
@@ -34,7 +29,6 @@ async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         num_puente = context.args[1]
         nombre_puente = f"puente {num_puente}".lower()
 
-        # Cargar hoja actualizada en cada consulta
         df = cargar_csv_drive(CSV_URL)
         if df.empty:
             await update.message.reply_text("Error al cargar los datos.")
