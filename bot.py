@@ -1,8 +1,8 @@
 
-from dotenv import load_dotenv
-import os
+#from dotenv import load_dotenv
+#import os
 
-load_dotenv()  # Esto carga las variables del archivo .env
+#load_dotenv()  # Esto carga las variables del archivo .env
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
