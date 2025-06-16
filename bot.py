@@ -33,7 +33,7 @@ if BOT_TOKEN is None:
 
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("¡Hola! Puedes escribir:\n/avance puente 10\n/avance mina de yeso\nO también escribir: avance san lázaro")
+    await update.message.reply_text("¡Hola! Puedes escribir:\n/avance {puente x}\nO también escribir: avance san lazaro\n /puentes : para listar puentes disponibles")
 
 # /avance ...
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
