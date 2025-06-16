@@ -24,7 +24,7 @@ def cargar_csv_drive(csv_url):
         print(f"Error al cargar el CSV: {e}")
         return pd.DataFrame()  # Retorna DataFrame vacío en caso de error
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+#BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("¡Hola! Escribe: /avance puente X")
