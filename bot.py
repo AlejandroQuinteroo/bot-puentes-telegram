@@ -17,14 +17,15 @@ def cargar_excel_drive(xlsx_url):
         try:
             response = requests.get(xlsx_url)
             response.raise_for_status()
-            # Leer solo el rango A5:W29 en hoja Resumen_Puentes con encabezado en la primera fila del rango (fila 5)
-            df = pd.read_excel(io.BytesIO(response.content), sheet_name="Resumen_Puentes", header=0, usecols="A:W", nrows=25, skiprows=4)
-            # skiprows=4 porque queremos que la fila 5 sea encabezado (filas comienzan en 0)
-            # nrows=25 para leer hasta fila 29 (desde fila 5)
-            
-            # Normalizar columna puente
+            df = pd.read_excel(
+                io.BytesIO(response.content),
+                sheet_name="Resumen_Puentes",
+                header=0,
+                usecols="A:W",
+                nrows=25,
+                skiprows=4,
+            )
             df["Puente_normalizado"] = df["Puente"].astype(str).str.strip().str.lower()
-            
             cache["df"] = df
             cache["last_update"] = ahora
         except Exception as e:
@@ -33,6 +34,7 @@ def cargar_excel_drive(xlsx_url):
             traceback.print_exc()
             return pd.DataFrame()
     return cache["df"]
+
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
