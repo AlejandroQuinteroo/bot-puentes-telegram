@@ -2,3 +2,5 @@ python-telegram-bot
 pandas
 requests
 openpyxl
+gspread 
+google-auth
