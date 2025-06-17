@@ -17,14 +17,10 @@ def cargar_excel_drive(xlsx_url):
         try:
             response = requests.get(xlsx_url)
             response.raise_for_status()
-            # Leer encabezados de dos filas
-            df = pd.read_excel(io.BytesIO(response.content), sheet_name="Resumen_Puentes", header=[0,1])
-            
-            # Combinar los encabezados en uno solo string
-            df.columns = [
-                f"{str(col[0]).strip()} {str(col[1]).strip()}" if col[1] != "" else str(col[0]).strip()
-                for col in df.columns
-            ]
+            # Leer solo el rango A5:W29 en hoja Resumen_Puentes con encabezado en la primera fila del rango (fila 5)
+            df = pd.read_excel(io.BytesIO(response.content), sheet_name="Resumen_Puentes", header=0, usecols="A:W", nrows=25, skiprows=4)
+            # skiprows=4 porque queremos que la fila 5 sea encabezado (filas comienzan en 0)
+            # nrows=25 para leer hasta fila 29 (desde fila 5)
             
             # Normalizar columna puente
             df["Puente_normalizado"] = df["Puente"].astype(str).str.strip().str.lower()
@@ -46,7 +42,7 @@ if BOT_TOKEN is None:
 
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("¡Hola! Puedes escribir:\n/avance {puente x}\nO también escribir: avance san lazaro\n /puentes : para listar puentes disponibles")
+    await update.message.reply_text("¡Hola! Puedes escribir:\n/avance {puente x}\nO también escribir: avance san lazaro\n/puentes : para listar puentes disponibles")
 
 # /avance ...
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
