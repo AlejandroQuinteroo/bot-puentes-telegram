@@ -6,7 +6,7 @@ import io
 import os
 import time
 
-XLSX_URL = "https://drive.google.com/uc?export=download&id=1Pyuajead_Ng3D-j1QpQHOuKNk90TPvZ8"
+XLSX_URL = "https://docs.google.com/spreadsheets/d/1Pyuajead_Ng3D-j1QpQHOuKNk90TPvZ8/export?format=xlsx&id=1Pyuajead_Ng3D-j1QpQHOuKNk90TPvZ8&gid=0"
 
 cache = {"df": None, "last_update": 0}
 CACHE_DURATION = 300  # 5 minutos
@@ -17,27 +17,36 @@ def cargar_excel_drive(xlsx_url):
         try:
             response = requests.get(xlsx_url)
             response.raise_for_status()
-            cache["df"] = pd.read_excel(io.BytesIO(response.content), sheet_name="Resumen_Puentes")
-            cache["df"]["Puente_normalizado"] = cache["df"]["Puente"].astype(str).str.strip().str.lower()
+            # Leer encabezados de dos filas
+            df = pd.read_excel(io.BytesIO(response.content), sheet_name="Resumen_Puentes", header=[0,1])
+            
+            # Combinar los encabezados en uno solo string
+            df.columns = [
+                f"{str(col[0]).strip()} {str(col[1]).strip()}" if col[1] != "" else str(col[0]).strip()
+                for col in df.columns
+            ]
+            
+            # Normalizar columna puente
+            df["Puente_normalizado"] = df["Puente"].astype(str).str.strip().str.lower()
+            
+            cache["df"] = df
             cache["last_update"] = ahora
         except Exception as e:
-            print(f"Error al cargar el XLSX: {e}")
+            import traceback
+            print("Error al cargar el archivo Excel:")
+            traceback.print_exc()
             return pd.DataFrame()
     return cache["df"]
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+
 if BOT_TOKEN is None:
     print("Error: No se encontró la variable de entorno BOT_TOKEN")
     exit(1)
 
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "¡Hola! Puedes escribir:\n"
-        "/avance {puente x}\n"
-        "O también escribir: avance mina de yeso\n"
-        "/puentes : para listar puentes disponibles"
-    )
+    await update.message.reply_text("¡Hola! Puedes escribir:\n/avance {puente x}\nO también escribir: avance san lazaro\n /puentes : para listar puentes disponibles")
 
 # /avance ...
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -78,7 +87,7 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
-# /puentes
+# /puentes para listar disponibles
 async def listar_puentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     df = cargar_excel_drive(XLSX_URL)
     if df.empty:
@@ -94,7 +103,7 @@ if __name__ == "__main__":
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("avance", avance))
-    app.add_handler(CommandHandler("puentes", listar_puentes))
+    app.add_handler(CommandHandler("puentes", listar_puentes))  # opcional
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
 
     app.run_polling()
