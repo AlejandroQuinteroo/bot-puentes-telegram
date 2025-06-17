@@ -6,41 +6,45 @@ import io
 import os
 import time
 
-CSV_URL = "https://docs.google.com/spreadsheets/d/1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw/export?format=csv&id=1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw&gid=0"
+XLSX_URL = "https://drive.google.com/uc?export=download&id=1Pyuajead_Ng3D-j1QpQHOuKNk90TPvZ8"
 
 cache = {"df": None, "last_update": 0}
 CACHE_DURATION = 300  # 5 minutos
 
-def cargar_csv_drive(csv_url):
+def cargar_excel_drive(xlsx_url):
     ahora = time.time()
     if cache["df"] is None or ahora - cache["last_update"] > CACHE_DURATION:
         try:
-            response = requests.get(csv_url)
+            response = requests.get(xlsx_url)
             response.raise_for_status()
-            cache["df"] = pd.read_csv(io.StringIO(response.content.decode('utf-8')))
+            cache["df"] = pd.read_excel(io.BytesIO(response.content), sheet_name="Resumen_Puentes")
             cache["df"]["Puente_normalizado"] = cache["df"]["Puente"].astype(str).str.strip().str.lower()
             cache["last_update"] = ahora
         except Exception as e:
-            print(f"Error al cargar el CSV: {e}")
+            print(f"Error al cargar el XLSX: {e}")
             return pd.DataFrame()
     return cache["df"]
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-
 if BOT_TOKEN is None:
     print("Error: No se encontró la variable de entorno BOT_TOKEN")
     exit(1)
 
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("¡Hola! Puedes escribir:\n/avance {puente x}\nO también escribir: avance san lazaro\n /puentes : para listar puentes disponibles")
+    await update.message.reply_text(
+        "¡Hola! Puedes escribir:\n"
+        "/avance {puente x}\n"
+        "O también escribir: avance mina de yeso\n"
+        "/puentes : para listar puentes disponibles"
+    )
 
 # /avance ...
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
         nombre_usuario = " ".join(context.args).strip().lower()
 
-        df = cargar_csv_drive(CSV_URL)
+        df = cargar_excel_drive(XLSX_URL)
         if df.empty:
             await update.message.reply_text("Error al cargar los datos.")
             return
@@ -48,7 +52,7 @@ async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fila = df[df["Puente_normalizado"] == nombre_usuario]
         if not fila.empty:
             nombre_real = fila.iloc[0]["Puente"]
-            avance = fila.iloc[0]["Avance (%)"]
+            avance = fila.iloc[0]["Avance"]
             await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
@@ -61,7 +65,7 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if texto.startswith("avance"):
         nombre_usuario = texto.replace("avance", "").strip()
 
-        df = cargar_csv_drive(CSV_URL)
+        df = cargar_excel_drive(XLSX_URL)
         if df.empty:
             await update.message.reply_text("Error al cargar los datos.")
             return
@@ -69,14 +73,14 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fila = df[df["Puente_normalizado"] == nombre_usuario]
         if not fila.empty:
             nombre_real = fila.iloc[0]["Puente"]
-            avance = fila.iloc[0]["Avance (%)"]
+            avance = fila.iloc[0]["Avance"]
             await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
-# Opcional: comando /puentes para listar disponibles
+# /puentes
 async def listar_puentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    df = cargar_csv_drive(CSV_URL)
+    df = cargar_excel_drive(XLSX_URL)
     if df.empty:
         await update.message.reply_text("Error al cargar los datos.")
         return
@@ -90,7 +94,7 @@ if __name__ == "__main__":
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("avance", avance))
-    app.add_handler(CommandHandler("puentes", listar_puentes))  # opcional
+    app.add_handler(CommandHandler("puentes", listar_puentes))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
 
     app.run_polling()
