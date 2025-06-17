@@ -6,31 +6,25 @@ import io
 import os
 import time
 
-XLSX_URL = "https://docs.google.com/spreadsheets/d/1Pyuajead_Ng3D-j1QpQHOuKNk90TPvZ8/export?format=xlsx&gid=951665795"
+# URL del CSV público exportado desde Google Sheets (Reemplaza con el tuyo)
+CSV_PUBLICO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-XXXXXXXX/pub?gid=951665795&single=true&output=csv"
 
 cache = {"df": None, "last_update": 0}
 CACHE_DURATION = 300  # 5 minutos
 
-def cargar_excel_drive(xlsx_url):
+def cargar_csv_publico(url_csv):
     ahora = time.time()
     if cache["df"] is None or ahora - cache["last_update"] > CACHE_DURATION:
         try:
-            response = requests.get(xlsx_url)
+            response = requests.get(url_csv)
             response.raise_for_status()
-            df = pd.read_excel(
-                io.BytesIO(response.content),
-                sheet_name="Resumen_Puentes",
-                header=4,          # encabezado en fila 5 (index 4)
-                usecols="A:W",     # columnas A a W
-                nrows=25           # filas 5 a 29 (25 filas)
-            )
+            df = pd.read_csv(io.StringIO(response.text))
+            # Normaliza el nombre del puente para facilitar búsqueda
             df["Puente_normalizado"] = df["Puente"].astype(str).str.strip().str.lower()
             cache["df"] = df
             cache["last_update"] = ahora
         except Exception as e:
-            import traceback
-            print("Error al cargar el archivo Excel:")
-            traceback.print_exc()
+            print(f"Error al cargar CSV público: {e}")
             return pd.DataFrame()
     return cache["df"]
 
@@ -40,21 +34,21 @@ if BOT_TOKEN is None:
     print("Error: No se encontró la variable de entorno BOT_TOKEN")
     exit(1)
 
-# /start
+# Comando /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "¡Hola! Puedes escribir:\n"
-        "/avance {puente x}\n"
+        "/avance {nombre del puente}\n"
         "O también escribir: avance san lazaro\n"
         "/puentes : para listar puentes disponibles"
     )
 
-# /avance ...
+# Comando /avance {puente}
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
         nombre_usuario = " ".join(context.args).strip().lower()
 
-        df = cargar_excel_drive(XLSX_URL)
+        df = cargar_csv_publico(CSV_PUBLICO_URL)
         if df.empty:
             await update.message.reply_text("Error al cargar los datos.")
             return
@@ -69,13 +63,13 @@ async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Usa: /avance nombre del puente")
 
-# Texto libre: "avance puente 10", "avance mina de yeso", etc.
+# Maneja mensajes de texto libre tipo "avance puente 10", "avance mina de yeso", etc.
 async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text.lower().strip()
     if texto.startswith("avance"):
         nombre_usuario = texto.replace("avance", "").strip()
 
-        df = cargar_excel_drive(XLSX_URL)
+        df = cargar_csv_publico(CSV_PUBLICO_URL)
         if df.empty:
             await update.message.reply_text("Error al cargar los datos.")
             return
@@ -88,9 +82,9 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
-# /puentes para listar puentes disponibles
+# Comando /puentes para listar puentes disponibles
 async def listar_puentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    df = cargar_excel_drive(XLSX_URL)
+    df = cargar_csv_publico(CSV_PUBLICO_URL)
     if df.empty:
         await update.message.reply_text("Error al cargar los datos.")
         return
@@ -104,7 +98,7 @@ if __name__ == "__main__":
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("avance", avance))
-    app.add_handler(CommandHandler("puentes", listar_puentes))
+    app.add_handler(CommandHandler("puentes", listar_puentes))  # opcional
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
 
     app.run_polling()
