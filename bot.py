@@ -1,115 +1,82 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
-
 import pandas as pd
-import gspread
+import requests
+import io
 import os
 import time
-import json
 
-from google.oauth2.service_account import Credentials
-
-# ================== Configuración de credenciales ==================
-scope = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
-
-# Cargar las credenciales desde la variable de entorno GOOGLE_CREDENTIALS
-google_creds = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
-creds = Credentials.from_service_account_info(google_creds, scopes=scope)
-client = gspread.authorize(creds)
-
-# Nombre de la hoja
-HOJA = "Resumen_Puentes"
-SPREADSHEET_ID = "1Pyuajead_Ng3D-j1QpQHOuKNk90TPvZ8"
-
-# Rango exacto donde está la tabla
-RANGO = "Resumen_Puentes!B5:W29"
+CSV_URL = "https://docs.google.com/spreadsheets/d/1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw/export?format=csv&id=1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw&gid=0"
 
 cache = {"df": None, "last_update": 0}
-CACHE_DURATION = 300  # segundos
+CACHE_DURATION = 300  # 5 minutos
 
-def cargar_datos():
+def cargar_csv_drive(csv_url):
     ahora = time.time()
     if cache["df"] is None or ahora - cache["last_update"] > CACHE_DURATION:
         try:
-            # Abrir la hoja y obtener el rango de datos
-            sheet = client.open_by_key(SPREADSHEET_ID)
-            values = sheet.values_get(RANGO)["values"]
-
-            # Crear DataFrame
-            encabezados = values[0]
-            datos = values[1:]
-            df = pd.DataFrame(datos, columns=encabezados)
-
-            # Asegurar que los nombres de columna estén limpios
-            df.columns = [c.strip() for c in df.columns]
-
-            # Normalizar nombre de puente
-            if "Puente" not in df.columns:
-                raise ValueError("No se encontró la columna 'Puente'")
-            df["Puente_normalizado"] = df["Puente"].str.strip().str.lower()
-
-            cache["df"] = df
+            response = requests.get(csv_url)
+            response.raise_for_status()
+            cache["df"] = pd.read_csv(io.StringIO(response.content.decode('utf-8')))
+            cache["df"]["Puente_normalizado"] = cache["df"]["Puente"].astype(str).str.strip().str.lower()
             cache["last_update"] = ahora
         except Exception as e:
-            print(f"Error al cargar datos de Google Sheets: {e}")
+            print(f"Error al cargar el CSV: {e}")
             return pd.DataFrame()
     return cache["df"]
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if BOT_TOKEN is None:
-    print("Error: BOT_TOKEN no está definido en variables de entorno")
+    print("Error: No se encontró la variable de entorno BOT_TOKEN")
     exit(1)
 
-# ================== Comandos de Telegram ==================
-
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "¡Hola! Puedes escribir:\n"
-        "/avance nombre del puente\n"
-        "Ejemplo: /avance puente 10\n"
-        "También puedes escribir: avance puente 10\n"
-        "/puentes : lista de puentes disponibles"
-    )
+    await update.message.reply_text("¡Hola! Puedes escribir:\n/avance {puente x}\nO también escribir: avance san lazaro\n /puentes : para listar puentes disponibles")
 
+# /avance ...
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
         nombre_usuario = " ".join(context.args).strip().lower()
-        df = cargar_datos()
+
+        df = cargar_csv_drive(CSV_URL)
         if df.empty:
             await update.message.reply_text("Error al cargar los datos.")
             return
+
         fila = df[df["Puente_normalizado"] == nombre_usuario]
         if not fila.empty:
             nombre_real = fila.iloc[0]["Puente"]
-            avance = fila.iloc[0].get("Avance", "¿Sin dato?")
+            avance = fila.iloc[0]["Avance (%)"]
             await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
     else:
         await update.message.reply_text("Usa: /avance nombre del puente")
 
+# Texto libre: "avance puente 10", "avance mina de yeso", etc.
 async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text.lower().strip()
     if texto.startswith("avance"):
         nombre_usuario = texto.replace("avance", "").strip()
-        df = cargar_datos()
+
+        df = cargar_csv_drive(CSV_URL)
         if df.empty:
             await update.message.reply_text("Error al cargar los datos.")
             return
+
         fila = df[df["Puente_normalizado"] == nombre_usuario]
         if not fila.empty:
             nombre_real = fila.iloc[0]["Puente"]
-            avance = fila.iloc[0].get("Avance", "¿Sin dato?")
+            avance = fila.iloc[0]["Avance (%)"]
             await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
+# Opcional: comando /puentes para listar disponibles
 async def listar_puentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    df = cargar_datos()
+    df = cargar_csv_drive(CSV_URL)
     if df.empty:
         await update.message.reply_text("Error al cargar los datos.")
         return
@@ -117,12 +84,13 @@ async def listar_puentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = "Puentes disponibles:\n" + "\n".join(f"• {p}" for p in puentes)
     await update.message.reply_text(texto)
 
-# ================== Lanzar el bot ==================
-
+# Lanzamiento del bot
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("avance", avance))
-    app.add_handler(CommandHandler("puentes", listar_puentes))
+    app.add_handler(CommandHandler("puentes", listar_puentes))  # opcional
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
+
     app.run_polling()
