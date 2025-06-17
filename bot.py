@@ -6,7 +6,7 @@ import io
 import os
 import time
 
-XLSX_URL = "https://docs.google.com/spreadsheets/d/1Pyuajead_Ng3D-j1QpQHOuKNk90TPvZ8/export?format=xlsx&id=1Pyuajead_Ng3D-j1QpQHOuKNk90TPvZ8&gid=0"
+XLSX_URL = "https://docs.google.com/spreadsheets/d/1Pyuajead_Ng3D-j1QpQHOuKNk90TPvZ8/export?format=xlsx&gid=951665795"
 
 cache = {"df": None, "last_update": 0}
 CACHE_DURATION = 300  # 5 minutos
@@ -20,10 +20,9 @@ def cargar_excel_drive(xlsx_url):
             df = pd.read_excel(
                 io.BytesIO(response.content),
                 sheet_name="Resumen_Puentes",
-                header=0,
-                usecols="A:W",
-                nrows=25,
-                skiprows=4,
+                header=4,          # encabezado en fila 5 (index 4)
+                usecols="A:W",     # columnas A a W
+                nrows=25           # filas 5 a 29 (25 filas)
             )
             df["Puente_normalizado"] = df["Puente"].astype(str).str.strip().str.lower()
             cache["df"] = df
@@ -35,7 +34,6 @@ def cargar_excel_drive(xlsx_url):
             return pd.DataFrame()
     return cache["df"]
 
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 if BOT_TOKEN is None:
@@ -44,7 +42,12 @@ if BOT_TOKEN is None:
 
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("¡Hola! Puedes escribir:\n/avance {puente x}\nO también escribir: avance san lazaro\n/puentes : para listar puentes disponibles")
+    await update.message.reply_text(
+        "¡Hola! Puedes escribir:\n"
+        "/avance {puente x}\n"
+        "O también escribir: avance san lazaro\n"
+        "/puentes : para listar puentes disponibles"
+    )
 
 # /avance ...
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -85,7 +88,7 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
-# /puentes para listar disponibles
+# /puentes para listar puentes disponibles
 async def listar_puentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     df = cargar_excel_drive(XLSX_URL)
     if df.empty:
@@ -101,7 +104,7 @@ if __name__ == "__main__":
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("avance", avance))
-    app.add_handler(CommandHandler("puentes", listar_puentes))  # opcional
+    app.add_handler(CommandHandler("puentes", listar_puentes))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
 
     app.run_polling()
