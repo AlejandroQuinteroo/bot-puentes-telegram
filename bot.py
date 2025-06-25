@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import pandas as pd
 import requests
@@ -13,6 +12,7 @@ from telegram.ext import (
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+import asyncio
 
 # ------------------ CONFIGURACIÓN ------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "AQUI_VA_TU_TOKEN_DEL_BOT"
@@ -29,7 +29,6 @@ CACHE_DURATION = 300  # segundos
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ------------------ FUNCIONES ------------------
 def cargar_csv_drive(csv_url):
     ahora = time.time()
     if cache["df"] is None or ahora - cache["last_update"] > CACHE_DURATION:
@@ -168,11 +167,11 @@ async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error en /resumen: {e}")
         await update.message.reply_text(f"❌ Error al enviar el resumen: {e}")
 
-async def resumen_diario_job():
-    await enviar_resumen_directo()
+def resumen_diario_job():
+    # Esta función es llamada por APScheduler, que es síncrona, así que llama la coroutine de forma segura:
+    asyncio.create_task(enviar_resumen_directo())
 
-# ------------------ FUNCIÓN PRINCIPAL ------------------
-async def main():
+def main():
     global bot
     bot = Bot(token=BOT_TOKEN)
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -188,10 +187,9 @@ async def main():
     scheduler.start()
 
     logger.info("Bot iniciado y scheduler activo.")
-    await app.run_polling()
 
-# ------------------ ARRANQUE ------------------
+    # run_polling es síncrono y maneja el event loop internamente
+    app.run_polling()
+
 if __name__ == "__main__":
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(main())
+    main()
