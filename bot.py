@@ -99,12 +99,14 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             return
 
         hoy = datetime.now()
-        pendientes = []
+        bloques = []
+        bloque_actual = ""
 
         for _, row in df.iterrows():
             try:
                 fecha_colado = pd.to_datetime(row.get("fecha", ""))
                 dias = (hoy - fecha_colado).days
+                fecha_str = fecha_colado.strftime("%d/%m/%y")
             except:
                 continue
 
@@ -115,34 +117,42 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             if s7 == 0 and s14 == 0 and s28 == 0:
                 continue
 
-            cond_7 = (s7 == "" or pd.isna(s7)) and dias >= 7
-            cond_14 = (s14 == "" or pd.isna(s14)) and dias >= 14
-            cond_28 = (s28 == "" or pd.isna(s28)) and dias >= 28
+            pendientes = []
+            if (s7 == "" or pd.isna(s7)) and dias >= 7:
+                pendientes.append("7 días")
+            if (s14 == "" or pd.isna(s14)) and dias >= 14:
+                pendientes.append("14 días")
+            if (s28 == "" or pd.isna(s28)) and dias >= 28:
+                pendientes.append("28 días")
 
-            if cond_7 or cond_14 or cond_28:
-                fila_texto = (
-                    f"{row.get('puente','')} | {row.get('apoyo','')} | {row.get('no._elemento','')} | "
-                    f"{row.get('elemento','')} | {row.get('fecha','')} | "
-                    f"{s7 or ' '} | {s14 or ' '} | {s28 or ' '}"
+            if pendientes:
+                linea = (
+                    f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
+                    f"🗒️ *Fecha colado:* {fecha_str}\n"
+                    f"🗒️ *{dias}* días desde colado\n"
+                    f"⏱ Se pueden pedir a: {', '.join(pendientes)}\n\n"
                 )
-                pendientes.append(fila_texto)
+                if len(bloque_actual + linea) > 3500:
+                    bloques.append(bloque_actual)
+                    bloque_actual = ""
+                bloque_actual += linea
 
-        if not pendientes:
+        if bloque_actual.strip():
+            bloques.append(bloque_actual)
+
+        if not bloques:
             await context.bot.send_message(chat_id=chat_id, text="✅ No hay pruebas pendientes.")
             return
 
-        encabezado = "*📋 Pruebas pendientes:*\n\n"
-        mensaje = encabezado + "\n".join(pendientes)
-        if len(mensaje) > 4000:
-            partes = [pendientes[i:i+50] for i in range(0, len(pendientes), 50)]
-            for i, bloque in enumerate(partes):
-                await context.bot.send_message(chat_id=chat_id, text="\n".join(bloque), parse_mode="Markdown")
-        else:
-            await context.bot.send_message(chat_id=chat_id, text=mensaje, parse_mode="Markdown")
-
+        encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
+        for i, bloque in enumerate(bloques):
+            texto = encabezado + bloque if i == 0 else bloque
+            await context.bot.send_message(chat_id=chat_id, text=texto, parse_mode="Markdown")
+        
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
 
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
