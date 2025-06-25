@@ -3,29 +3,24 @@ import pandas as pd
 import requests
 import io
 import os
-import asyncio
 from datetime import datetime
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes,
     MessageHandler, filters
 )
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 
-# --- CONFIGURACIÓN ---
+# -------- CONFIGURACIÓN --------
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "AQUI_VA_TU_TOKEN_DEL_BOT"
 CSV_URL = "https://docs.google.com/spreadsheets/d/1cscTPpqlYWp9qXYaG7ERN_iCKx2_Qg_ygJB-67GHGXs/export?format=csv&gid=0"
 
 cache = {"df": None, "last_update": 0}
-CACHE_DURATION = 300  # Segundos
+CACHE_DURATION = 300  # segundos
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- VARIABLE GLOBAL PARA CHATS REGISTRADOS ---
-chats_registrados = set()
-
+# -------- CARGA DE CSV --------
 def cargar_csv_drive(csv_url):
     import time as time_module
     ahora = time_module.time()
@@ -44,15 +39,13 @@ def cargar_csv_drive(csv_url):
             return pd.DataFrame()
     return cache["df"]
 
+# -------- COMANDOS --------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    chats_registrados.add(chat_id)
     await update.message.reply_text(
-        "¡Hola! Bot activado y chat registrado para resúmenes diarios.\n"
-        "Usa:\n"
+        "¡Hola! Puedes usar:\n"
         "/avance {puente}\n"
-        "/puentes\n"
-        "/resumen"
+        "/puentes para listar puentes\n"
+        "/resumen para ver pruebas pendientes"
     )
 
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -65,12 +58,12 @@ async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fila = df[df["puente_normalizado"] == nombre_usuario]
         if not fila.empty:
             nombre_real = fila.iloc[0]["puente"]
-            avance = fila.iloc[0].get("avance_(%)", "No disponible")
+            avance = fila.iloc[0].get("avance_(%)", "Sin dato")
             await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
     else:
-        await update.message.reply_text("Usa: /avance nombre_del_puente")
+        await update.message.reply_text("Usa: /avance nombre del puente")
 
 async def listar_puentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     df = cargar_csv_drive(CSV_URL)
@@ -92,11 +85,12 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fila = df[df["puente_normalizado"] == nombre_usuario]
         if not fila.empty:
             nombre_real = fila.iloc[0]["puente"]
-            avance = fila.iloc[0].get("avance_(%)", "No disponible")
+            avance = fila.iloc[0].get("avance_(%)", "Sin dato")
             await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
+# -------- RESUMEN --------
 async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     try:
         df = cargar_csv_drive(CSV_URL)
@@ -105,14 +99,12 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             return
 
         hoy = datetime.now()
-        bloques = []
-        bloque_actual = ""
+        pendientes = []
 
         for _, row in df.iterrows():
             try:
                 fecha_colado = pd.to_datetime(row.get("fecha", ""))
                 dias = (hoy - fecha_colado).days
-                fecha_str = fecha_colado.strftime("%d/%m/%y")
             except:
                 continue
 
@@ -123,37 +115,30 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             if s7 == 0 and s14 == 0 and s28 == 0:
                 continue
 
-            pendientes = []
-            if (s7 == "" or pd.isna(s7)) and dias >= 7:
-                pendientes.append("7 días")
-            if (s14 == "" or pd.isna(s14)) and dias >= 14:
-                pendientes.append("14 días")
-            if (s28 == "" or pd.isna(s28)) and dias >= 28:
-                pendientes.append("28 días")
+            cond_7 = (s7 == "" or pd.isna(s7)) and dias >= 7
+            cond_14 = (s14 == "" or pd.isna(s14)) and dias >= 14
+            cond_28 = (s28 == "" or pd.isna(s28)) and dias >= 28
 
-            if pendientes:
-                linea = (
-                    f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
-                    f"🗒️ *Fecha colado:* {fecha_str}\n"
-                    f"🗒️ *{dias}* días desde colado\n"
-                    f"⏱ Se pueden pedir a: {', '.join(pendientes)}\n\n"
+            if cond_7 or cond_14 or cond_28:
+                fila_texto = (
+                    f"{row.get('puente','')} | {row.get('apoyo','')} | {row.get('no._elemento','')} | "
+                    f"{row.get('elemento','')} | {row.get('fecha','')} | "
+                    f"{s7 or ' '} | {s14 or ' '} | {s28 or ' '}"
                 )
-                if len(bloque_actual + linea) > 3500:
-                    bloques.append(bloque_actual)
-                    bloque_actual = ""
-                bloque_actual += linea
+                pendientes.append(fila_texto)
 
-        if bloque_actual.strip():
-            bloques.append(bloque_actual)
-
-        if not bloques:
+        if not pendientes:
             await context.bot.send_message(chat_id=chat_id, text="✅ No hay pruebas pendientes.")
             return
 
-        encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
-        for i, bloque in enumerate(bloques):
-            texto = encabezado + bloque if i == 0 else bloque
-            await context.bot.send_message(chat_id=chat_id, text=texto, parse_mode="Markdown")
+        encabezado = "*📋 Pruebas pendientes:*\n\n"
+        mensaje = encabezado + "\n".join(pendientes)
+        if len(mensaje) > 4000:
+            partes = [pendientes[i:i+50] for i in range(0, len(pendientes), 50)]
+            for i, bloque in enumerate(partes):
+                await context.bot.send_message(chat_id=chat_id, text="\n".join(bloque), parse_mode="Markdown")
+        else:
+            await context.bot.send_message(chat_id=chat_id, text=mensaje, parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
@@ -164,13 +149,7 @@ async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await enviar_resumen_directo(context, chat_id)
     await update.message.reply_text("✅ Resumen enviado correctamente.")
 
-def resumen_diario_job(app):
-    if not chats_registrados:
-        logger.warning("No hay chats registrados para enviar el resumen diario.")
-        return
-    for chat_id in chats_registrados:
-        asyncio.create_task(enviar_resumen_directo(app.bot, chat_id))
-
+# -------- INICIO --------
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -180,11 +159,7 @@ def main():
     app.add_handler(CommandHandler("resumen", comando_resumen))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
 
-    scheduler = AsyncIOScheduler(timezone="America/Mexico_City")
-    scheduler.add_job(lambda: resumen_diario_job(app), CronTrigger(hour=7, minute=0))
-    scheduler.start()
-
-    logger.info("Bot iniciado y programador activo.")
+    logger.info("Bot iniciado.")
     app.run_polling()
 
 if __name__ == "__main__":
