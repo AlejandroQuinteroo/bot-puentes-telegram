@@ -7,19 +7,25 @@ import os
 import time
 from datetime import datetime
 from telegram import Update, Bot
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, ContextTypes,
+    MessageHandler, filters
+)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 # ------------------ CONFIGURACIÓN ------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "AQUI_VA_TU_TOKEN_DEL_BOT"
-CHAT_ID_DESTINO = 5218342474660  # reemplaza con tu ID de usuario o grupo
-CSV_URL = "https://docs.google.com/spreadsheets/d/1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw/export?format=csv&id=1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw&gid=0"
+CHAT_ID_DESTINO = 5218342474660  # Cambia por tu ID real
+CSV_URL = (
+    "https://docs.google.com/spreadsheets/d/1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw/"
+    "export?format=csv&id=1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw&gid=0"
+)
 
 cache = {"df": None, "last_update": 0}
 CACHE_DURATION = 300  # segundos
 
-# Configurar logging
+# Logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -30,7 +36,7 @@ def cargar_csv_drive(csv_url):
         try:
             response = requests.get(csv_url)
             response.raise_for_status()
-            df = pd.read_csv(io.StringIO(response.content.decode('utf-8')))
+            df = pd.read_csv(io.StringIO(response.content.decode("utf-8")))
             df["Puente_normalizado"] = df["Puente"].astype(str).str.strip().str.lower()
             cache["df"] = df
             cache["last_update"] = ahora
@@ -90,7 +96,6 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
-# ------------------ RESUMEN AUTOMÁTICO ------------------
 async def enviar_resumen_directo():
     try:
         df = cargar_csv_drive(CSV_URL)
@@ -155,7 +160,6 @@ async def enviar_resumen_directo():
         logger.error(f"Error al generar resumen: {e}")
         await bot.send_message(chat_id=CHAT_ID_DESTINO, text=f"Error al generar resumen: {e}")
 
-# ------------------ HANDLER PARA /resumen ------------------
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await enviar_resumen_directo()
@@ -164,7 +168,6 @@ async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error en /resumen: {e}")
         await update.message.reply_text(f"❌ Error al enviar el resumen: {e}")
 
-# ------------------ EJECUCIÓN DIARIA ------------------
 async def resumen_diario_job():
     await enviar_resumen_directo()
 
@@ -189,4 +192,6 @@ async def main():
 
 # ------------------ ARRANQUE ------------------
 if __name__ == "__main__":
-    asyncio.run(main())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(main())
