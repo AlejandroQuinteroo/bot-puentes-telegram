@@ -103,8 +103,8 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
         def puede_pedir_prueba(valor_celda):
             if valor_celda is None:
                 return True
-            val_str = str(valor_celda).strip()
-            return val_str == "" or val_str == "0" or pd.isna(valor_celda)
+            val_str = str(valor_celda).strip().lower()
+            return val_str in ("", "0", "nan", "none")
 
         bloques = []
         bloque_actual = ""
@@ -121,6 +121,9 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             s14 = row.get("14_dias", None)
             s28 = row.get("28_dias", None)
 
+            # DEBUG: imprime para revisar valores
+            logger.info(f"Puente: {row.get('puente','')} - Días: {dias} - s7: '{s7}' - s14: '{s14}' - s28: '{s28}'")
+
             pruebas_pendientes = []
 
             if dias >= 7 and puede_pedir_prueba(s7):
@@ -131,7 +134,7 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
                 pruebas_pendientes.append("28 días")
 
             if not pruebas_pendientes:
-                continue  # No hay pruebas pendientes para pedir
+                continue
 
             texto_pruebas = ", ".join(pruebas_pendientes)
 
@@ -162,6 +165,7 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
 
 
 
