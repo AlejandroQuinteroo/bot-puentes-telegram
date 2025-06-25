@@ -91,7 +91,8 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
 # -------- RESUMEN --------
-async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+
+async def enviar_resumen_directo(context, chat_id):
     try:
         df = cargar_csv_drive(CSV_URL)
         if df.empty:
@@ -99,6 +100,7 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             return
 
         hoy = datetime.now()
+        encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
 
         def esta_registrado(valor_celda):
             if valor_celda is None:
@@ -121,18 +123,15 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             s14 = row.get("14_dias")
             s28 = row.get("28_dias")
 
-            pruebas_registradas = {
-                '7_dias': esta_registrado(s7),
-                '14_dias': esta_registrado(s14),
-                '28_dias': esta_registrado(s28),
-            }
+            if esta_registrado(s7) and esta_registrado(s14) and esta_registrado(s28):
+                continue  # Todas las pruebas ya registradas, no enviar
 
             pruebas_pendientes = []
-            if dias >= 7 and not pruebas_registradas['7_dias']:
+            if dias >= 7 and not esta_registrado(s7):
                 pruebas_pendientes.append("7 días")
-            if dias >= 14 and not pruebas_registradas['14_dias']:
+            if dias >= 14 and not esta_registrado(s14):
                 pruebas_pendientes.append("14 días")
-            if dias >= 28 and not pruebas_registradas['28_dias']:
+            if dias >= 28 and not esta_registrado(s28):
                 pruebas_pendientes.append("28 días")
 
             if not pruebas_pendientes:
@@ -159,7 +158,6 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             await context.bot.send_message(chat_id=chat_id, text="✅ No hay pruebas pendientes.")
             return
 
-        encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
         for i, bloque in enumerate(bloques):
             texto = encabezado + bloque if i == 0 else bloque
             await context.bot.send_message(chat_id=chat_id, text=texto, parse_mode="Markdown")
@@ -167,6 +165,7 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
 
 
 
