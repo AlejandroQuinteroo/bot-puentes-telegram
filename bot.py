@@ -101,7 +101,10 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
         hoy = datetime.now()
 
         def puede_pedir_prueba(valor_celda):
-            return valor_celda == "" or valor_celda == 0 or pd.isna(valor_celda)
+            if valor_celda is None:
+                return True
+            val_str = str(valor_celda).strip()
+            return val_str == "" or val_str == "0" or pd.isna(valor_celda)
 
         bloques = []
         bloque_actual = ""
@@ -109,7 +112,7 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
         for _, row in df.iterrows():
             fecha_colado = pd.to_datetime(row.get("fecha", ""), errors='coerce')
             if pd.isna(fecha_colado):
-                continue  # Salta fila si fecha inválida
+                continue
 
             dias = (hoy - fecha_colado).days
             fecha_str = fecha_colado.strftime("%d/%m/%y")
@@ -118,25 +121,25 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             s14 = row.get("14_dias", None)
             s28 = row.get("28_dias", None)
 
-            # Ignorar si ya se registraron las 3 pruebas (distintas de "" y 0)
-            if not puede_pedir_prueba(s7) and not puede_pedir_prueba(s14) and not puede_pedir_prueba(s28):
-                continue
+            pruebas_pendientes = []
 
-            pendiente = ""
+            if dias >= 7 and puede_pedir_prueba(s7):
+                pruebas_pendientes.append("7 días")
+            if dias >= 14 and puede_pedir_prueba(s14):
+                pruebas_pendientes.append("14 días")
             if dias >= 28 and puede_pedir_prueba(s28):
-                pendiente = f"Se puede pedir pruebas de 28 días ({dias} días)"
-            elif dias >= 14 and puede_pedir_prueba(s14):
-                pendiente = f"Se puede pedir pruebas de 14 días ({dias} días)"
-            elif dias >= 7 and puede_pedir_prueba(s7):
-                pendiente = f"Se puede pedir pruebas de 7 días ({dias} días)"
-            else:
-                continue  # No cumple días mínimos o ya está registrada la prueba
+                pruebas_pendientes.append("28 días")
+
+            if not pruebas_pendientes:
+                continue  # No hay pruebas pendientes para pedir
+
+            texto_pruebas = ", ".join(pruebas_pendientes)
 
             linea = (
                 f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
                 f"🗒️ *Fecha colado:* {fecha_str}\n"
                 f"🗒️ *{dias}* días desde colado\n"
-                f"⏱ {pendiente}\n\n"
+                f"⏱ Se pueden pedir pruebas de: {texto_pruebas}\n\n"
             )
 
             if len(bloque_actual + linea) > 3500:
