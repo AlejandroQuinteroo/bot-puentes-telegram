@@ -100,8 +100,8 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
 
         hoy = datetime.now()
 
-        def esta_vacio_o_nan(valor):
-            return valor == "" or pd.isna(valor)
+        def puede_pedir_prueba(valor_celda):
+            return valor_celda == "" or valor_celda == 0 or pd.isna(valor_celda)
 
         bloques = []
         bloque_actual = ""
@@ -109,7 +109,7 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
         for _, row in df.iterrows():
             fecha_colado = pd.to_datetime(row.get("fecha", ""), errors='coerce')
             if pd.isna(fecha_colado):
-                continue  # Salta si la fecha es inválida
+                continue  # Salta fila si fecha inválida
 
             dias = (hoy - fecha_colado).days
             fecha_str = fecha_colado.strftime("%d/%m/%y")
@@ -118,20 +118,19 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             s14 = row.get("14_dias", None)
             s28 = row.get("28_dias", None)
 
-            # Si todas las pruebas están hechas (0), no hay pendiente
-            if s7 == 0 and s14 == 0 and s28 == 0:
+            # Ignorar si ya se registraron las 3 pruebas (distintas de "" y 0)
+            if not puede_pedir_prueba(s7) and not puede_pedir_prueba(s14) and not puede_pedir_prueba(s28):
                 continue
 
             pendiente = ""
-            if dias >= 28 and esta_vacio_o_nan(s28):
+            if dias >= 28 and puede_pedir_prueba(s28):
                 pendiente = f"Se puede pedir pruebas de 28 días ({dias} días)"
-            elif dias >= 14 and esta_vacio_o_nan(s14):
+            elif dias >= 14 and puede_pedir_prueba(s14):
                 pendiente = f"Se puede pedir pruebas de 14 días ({dias} días)"
-            elif dias >= 7 and esta_vacio_o_nan(s7):
+            elif dias >= 7 and puede_pedir_prueba(s7):
                 pendiente = f"Se puede pedir pruebas de 7 días ({dias} días)"
             else:
-                # No cumple ningún rango para pedir pruebas aún
-                continue
+                continue  # No cumple días mínimos o ya está registrada la prueba
 
             linea = (
                 f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
@@ -160,6 +159,7 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
 
 
 
