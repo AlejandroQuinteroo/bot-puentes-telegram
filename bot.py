@@ -6,8 +6,10 @@ import io
 import os
 import time
 from datetime import datetime
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 import asyncio
+import logging
 
 # ------------------ CONFIGURACIÓN ------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "AQUI_VA_TU_TOKEN_DEL_BOT"
@@ -16,6 +18,10 @@ CSV_URL = "https://docs.google.com/spreadsheets/d/1s1C0MpybJ7h32N1aPBo0bPlWqwiez
 
 cache = {"df": None, "last_update": 0}
 CACHE_DURATION = 300  # segundos
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ------------------ FUNCIONES ------------------
 def cargar_csv_drive(csv_url):
@@ -28,13 +34,19 @@ def cargar_csv_drive(csv_url):
             df["Puente_normalizado"] = df["Puente"].astype(str).str.strip().str.lower()
             cache["df"] = df
             cache["last_update"] = ahora
+            logger.info("CSV cargado y cache actualizado.")
         except Exception as e:
-            print(f"Error al cargar el CSV: {e}")
+            logger.error(f"Error al cargar el CSV: {e}")
             return pd.DataFrame()
     return cache["df"]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("¡Hola! Puedes usar:\n/avance {puente}\n/puentes para listar puentes\n/resumen para ver pruebas pendientes")
+    await update.message.reply_text(
+        "¡Hola! Puedes usar:\n"
+        "/avance {puente}\n"
+        "/puentes para listar puentes\n"
+        "/resumen para ver pruebas pendientes"
+    )
 
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
@@ -100,7 +112,7 @@ async def enviar_resumen_directo():
             fecha_colado_raw = row.get("Fecha colado", "")
             try:
                 fecha_colado = pd.to_datetime(fecha_colado_raw)
-            except:
+            except Exception:
                 continue
             dias = (hoy - fecha_colado).days
             s7 = row.get("S7", 0)
@@ -116,10 +128,12 @@ async def enviar_resumen_directo():
             if pd.isna(s28) and dias >= 28:
                 pendientes.append("28 días")
             if pendientes:
-                linea = f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n" \
-                        f"🗒️ *Fecha colado:* {fecha_colado.strftime('%d/%m/%y')}\n" \
-                        f"🗒️ *{dias}* días desde colado\n" \
-                        f"⏱ Se pueden pedir a: {', '.join(pendientes)}\n\n"
+                linea = (
+                    f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n"
+                    f"🗒️ *Fecha colado:* {fecha_colado.strftime('%d/%m/%y')}\n"
+                    f"🗒️ *{dias}* días desde colado\n"
+                    f"⏱ Se pueden pedir a: {', '.join(pendientes)}\n\n"
+                )
                 if len(bloque_actual + linea) > 3500:
                     bloques.append(bloque_actual)
                     bloque_actual = ""
@@ -135,14 +149,24 @@ async def enviar_resumen_directo():
         for i, bloque in enumerate(bloques):
             mensaje = encabezado + bloque if i == 0 else bloque
             await bot.send_message(chat_id=CHAT_ID_DESTINO, text=mensaje, parse_mode="Markdown")
-            time.sleep(1)
+            await asyncio.sleep(1)
 
     except Exception as e:
+        logger.error(f"Error al generar resumen: {e}")
         await bot.send_message(chat_id=CHAT_ID_DESTINO, text=f"Error al generar resumen: {e}")
 
+# ------------------ HANDLER PARA /resumen ------------------
+async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await enviar_resumen_directo()
+        await update.message.reply_text("✅ Resumen enviado correctamente.")
+    except Exception as e:
+        logger.error(f"Error en /resumen: {e}")
+        await update.message.reply_text(f"❌ Error al enviar el resumen: {e}")
+
 # ------------------ EJECUCIÓN DIARIA ------------------
-def resumen_diario():
-    asyncio.run(enviar_resumen_directo())
+async def resumen_diario_job():
+    await enviar_resumen_directo()
 
 # ------------------ MAIN ------------------
 if __name__ == "__main__":
@@ -152,11 +176,12 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("avance", avance))
     app.add_handler(CommandHandler("puentes", listar_puentes))
-    app.add_handler(CommandHandler("resumen", lambda u, c: asyncio.run(enviar_resumen_directo())))
+    app.add_handler(CommandHandler("resumen", comando_resumen))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
 
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(resumen_diario, 'cron', hour=7, minute=0, timezone='America/Mexico_City')
+    scheduler = AsyncIOScheduler(timezone="America/Mexico_City")
+    scheduler.add_job(resumen_diario_job, CronTrigger(hour=7, minute=0))
     scheduler.start()
 
+    logger.info("Bot iniciado y scheduler activo.")
     app.run_polling()
