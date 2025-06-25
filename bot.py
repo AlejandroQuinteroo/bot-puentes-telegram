@@ -1,15 +1,15 @@
-from telegram import Update, Bot
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+import asyncio
+import logging
 import pandas as pd
 import requests
 import io
 import os
 import time
 from datetime import datetime
+from telegram import Update, Bot
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-import asyncio
-import logging
 
 # ------------------ CONFIGURACIÓN ------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "AQUI_VA_TU_TOKEN_DEL_BOT"
@@ -168,8 +168,9 @@ async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def resumen_diario_job():
     await enviar_resumen_directo()
 
-# ------------------ MAIN ------------------
-if __name__ == "__main__":
+# ------------------ FUNCIÓN PRINCIPAL ------------------
+async def main():
+    global bot
     bot = Bot(token=BOT_TOKEN)
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -184,4 +185,8 @@ if __name__ == "__main__":
     scheduler.start()
 
     logger.info("Bot iniciado y scheduler activo.")
-    app.run_polling()
+    await app.run_polling()
+
+# ------------------ ARRANQUE ------------------
+if __name__ == "__main__":
+    asyncio.run(main())
