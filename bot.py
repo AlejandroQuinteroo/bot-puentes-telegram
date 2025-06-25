@@ -118,26 +118,26 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             s14 = row.get("14_dias", None)
             s28 = row.get("28_dias", None)
 
-            # Si las 3 pruebas están hechas (0), no hay pendientes
+            # Si todas las pruebas están hechas (0), no hay pendiente
             if s7 == 0 and s14 == 0 and s28 == 0:
                 continue
 
-            pendientes = []
-            if esta_vacio_o_nan(s7) and dias >= 7:
-                pendientes.append("7 días")
-            if esta_vacio_o_nan(s14) and dias >= 14:
-                pendientes.append("14 días")
-            if esta_vacio_o_nan(s28) and dias >= 28:
-                pendientes.append("28 días")
-
-            if not pendientes:
+            pendiente = ""
+            if dias >= 28 and esta_vacio_o_nan(s28):
+                pendiente = f"Se puede pedir pruebas de 28 días ({dias} días)"
+            elif dias >= 14 and esta_vacio_o_nan(s14):
+                pendiente = f"Se puede pedir pruebas de 14 días ({dias} días)"
+            elif dias >= 7 and esta_vacio_o_nan(s7):
+                pendiente = f"Se puede pedir pruebas de 7 días ({dias} días)"
+            else:
+                # No cumple ningún rango para pedir pruebas aún
                 continue
 
             linea = (
                 f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
                 f"🗒️ *Fecha colado:* {fecha_str}\n"
                 f"🗒️ *{dias}* días desde colado\n"
-                f"⏱ Se pueden pedir a: {', '.join(pendientes)}\n\n"
+                f"⏱ {pendiente}\n\n"
             )
 
             if len(bloque_actual + linea) > 3500:
@@ -160,6 +160,7 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
 
 
 
