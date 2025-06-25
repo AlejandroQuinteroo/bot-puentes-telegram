@@ -3,20 +3,16 @@ import pandas as pd
 import requests
 import io
 import os
-import time
-from datetime import datetime
-from telegram import Update, Bot
+from datetime import datetime, time
+from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes,
     MessageHandler, filters
 )
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
-import asyncio
 
 # ------------------ CONFIGURACIÓN ------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "AQUI_VA_TU_TOKEN_DEL_BOT"
-CHAT_ID_DESTINO = 5218342474660  # Cambia por tu ID real
+CHAT_ID_DESTINO = 521834247  # Cambia por tu chat ID real
 CSV_URL = (
     "https://docs.google.com/spreadsheets/d/1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw/"
     "export?format=csv&id=1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw&gid=0"
@@ -30,7 +26,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def cargar_csv_drive(csv_url):
-    ahora = time.time()
+    import time as time_module
+    ahora = time_module.time()
     if cache["df"] is None or ahora - cache["last_update"] > CACHE_DURATION:
         try:
             response = requests.get(csv_url)
@@ -95,11 +92,11 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
-async def enviar_resumen_directo():
+async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE):
     try:
         df = cargar_csv_drive(CSV_URL)
         if df.empty:
-            await bot.send_message(chat_id=CHAT_ID_DESTINO, text="Error al cargar los datos.")
+            await context.bot.send_message(chat_id=CHAT_ID_DESTINO, text="Error al cargar los datos.")
             return
 
         hoy = datetime.now()
@@ -147,33 +144,25 @@ async def enviar_resumen_directo():
             bloques.append(bloque_actual)
 
         if not bloques:
-            await bot.send_message(chat_id=CHAT_ID_DESTINO, text="✅ No hay pendientes en las pruebas.")
+            await context.bot.send_message(chat_id=CHAT_ID_DESTINO, text="✅ No hay pendientes en las pruebas.")
             return
 
         for i, bloque in enumerate(bloques):
             mensaje = encabezado + bloque if i == 0 else bloque
-            await bot.send_message(chat_id=CHAT_ID_DESTINO, text=mensaje, parse_mode="Markdown")
-            await asyncio.sleep(1)
-
+            await context.bot.send_message(chat_id=CHAT_ID_DESTINO, text=mensaje, parse_mode="Markdown")
     except Exception as e:
         logger.error(f"Error al generar resumen: {e}")
-        await bot.send_message(chat_id=CHAT_ID_DESTINO, text=f"Error al generar resumen: {e}")
+        await context.bot.send_message(chat_id=CHAT_ID_DESTINO, text=f"Error al generar resumen: {e}")
 
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        await enviar_resumen_directo()
+        await enviar_resumen_directo(context)
         await update.message.reply_text("✅ Resumen enviado correctamente.")
     except Exception as e:
         logger.error(f"Error en /resumen: {e}")
         await update.message.reply_text(f"❌ Error al enviar el resumen: {e}")
 
-def resumen_diario_job():
-    # Esta función es llamada por APScheduler, que es síncrona, así que llama la coroutine de forma segura:
-    asyncio.create_task(enviar_resumen_directo())
-
 def main():
-    global bot
-    bot = Bot(token=BOT_TOKEN)
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -182,13 +171,12 @@ def main():
     app.add_handler(CommandHandler("resumen", comando_resumen))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
 
-    scheduler = AsyncIOScheduler(timezone="America/Mexico_City")
-    scheduler.add_job(resumen_diario_job, CronTrigger(hour=7, minute=0))
-    scheduler.start()
+    # Programar tarea diaria a las 7:00 AM (hora local del servidor)
+    from datetime import time as datetime_time
+    app.job_queue.run_daily(enviar_resumen_directo, time=datetime_time(hour=7, minute=0))
 
-    logger.info("Bot iniciado y scheduler activo.")
+    logger.info("Bot iniciado y job programado a las 7:00 AM.")
 
-    # run_polling es síncrono y maneja el event loop internamente
     app.run_polling()
 
 if __name__ == "__main__":
