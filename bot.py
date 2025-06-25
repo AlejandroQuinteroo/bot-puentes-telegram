@@ -3,24 +3,29 @@ import pandas as pd
 import requests
 import io
 import os
+import asyncio
 from datetime import datetime
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes,
     MessageHandler, filters
 )
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
-# -------- CONFIGURACIÓN --------
+# --- CONFIGURACIÓN ---
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "AQUI_VA_TU_TOKEN_DEL_BOT"
 CSV_URL = "https://docs.google.com/spreadsheets/d/1cscTPpqlYWp9qXYaG7ERN_iCKx2_Qg_ygJB-67GHGXs/export?format=csv&gid=0"
 
 cache = {"df": None, "last_update": 0}
-CACHE_DURATION = 300  # segundos
+CACHE_DURATION = 300  # Segundos
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# -------- CARGA DE CSV --------
+# --- VARIABLE GLOBAL PARA CHATS REGISTRADOS ---
+chats_registrados = set()
+
 def cargar_csv_drive(csv_url):
     import time as time_module
     ahora = time_module.time()
@@ -39,13 +44,15 @@ def cargar_csv_drive(csv_url):
             return pd.DataFrame()
     return cache["df"]
 
-# -------- COMANDOS --------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    chats_registrados.add(chat_id)
     await update.message.reply_text(
-        "¡Hola! Puedes usar:\n"
+        "¡Hola! Bot activado y chat registrado para resúmenes diarios.\n"
+        "Usa:\n"
         "/avance {puente}\n"
-        "/puentes para listar puentes\n"
-        "/resumen para ver pruebas pendientes"
+        "/puentes\n"
+        "/resumen"
     )
 
 async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -58,12 +65,12 @@ async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fila = df[df["puente_normalizado"] == nombre_usuario]
         if not fila.empty:
             nombre_real = fila.iloc[0]["puente"]
-            avance = fila.iloc[0].get("avance_(%)", "Sin dato")
+            avance = fila.iloc[0].get("avance_(%)", "No disponible")
             await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
     else:
-        await update.message.reply_text("Usa: /avance nombre del puente")
+        await update.message.reply_text("Usa: /avance nombre_del_puente")
 
 async def listar_puentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     df = cargar_csv_drive(CSV_URL)
@@ -85,12 +92,11 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fila = df[df["puente_normalizado"] == nombre_usuario]
         if not fila.empty:
             nombre_real = fila.iloc[0]["puente"]
-            avance = fila.iloc[0].get("avance_(%)", "Sin dato")
+            avance = fila.iloc[0].get("avance_(%)", "No disponible")
             await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
-# -------- RESUMEN --------
 async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     try:
         df = cargar_csv_drive(CSV_URL)
@@ -148,18 +154,23 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
         for i, bloque in enumerate(bloques):
             texto = encabezado + bloque if i == 0 else bloque
             await context.bot.send_message(chat_id=chat_id, text=texto, parse_mode="Markdown")
-        
+
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
-
 
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     await enviar_resumen_directo(context, chat_id)
     await update.message.reply_text("✅ Resumen enviado correctamente.")
 
-# -------- INICIO --------
+def resumen_diario_job(app):
+    if not chats_registrados:
+        logger.warning("No hay chats registrados para enviar el resumen diario.")
+        return
+    for chat_id in chats_registrados:
+        asyncio.create_task(enviar_resumen_directo(app.bot, chat_id))
+
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -169,7 +180,11 @@ def main():
     app.add_handler(CommandHandler("resumen", comando_resumen))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
 
-    logger.info("Bot iniciado.")
+    scheduler = AsyncIOScheduler(timezone="America/Mexico_City")
+    scheduler.add_job(lambda: resumen_diario_job(app), CronTrigger(hour=7, minute=0))
+    scheduler.start()
+
+    logger.info("Bot iniciado y programador activo.")
     app.run_polling()
 
 if __name__ == "__main__":
