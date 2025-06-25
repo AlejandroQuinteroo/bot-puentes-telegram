@@ -100,11 +100,11 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
 
         hoy = datetime.now()
 
-        def puede_pedir_prueba(valor_celda):
+        def esta_registrado(valor_celda):
             if valor_celda is None:
-                return True
+                return False
             val_str = str(valor_celda).strip().lower()
-            return val_str in ("", "0", "nan", "none")
+            return val_str not in ("", "0", "none", "nan")
 
         bloques = []
         bloque_actual = ""
@@ -117,20 +117,22 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             dias = (hoy - fecha_colado).days
             fecha_str = fecha_colado.strftime("%d/%m/%y")
 
-            s7 = row.get("7_dias", None)
-            s14 = row.get("14_dias", None)
-            s28 = row.get("28_dias", None)
+            s7 = row.get("7_dias")
+            s14 = row.get("14_dias")
+            s28 = row.get("28_dias")
 
-            # DEBUG: imprime para revisar valores
-            logger.info(f"Puente: {row.get('puente','')} - Días: {dias} - s7: '{s7}' - s14: '{s14}' - s28: '{s28}'")
+            pruebas_registradas = {
+                '7_dias': esta_registrado(s7),
+                '14_dias': esta_registrado(s14),
+                '28_dias': esta_registrado(s28),
+            }
 
             pruebas_pendientes = []
-
-            if dias >= 7 and puede_pedir_prueba(s7):
+            if dias >= 7 and not pruebas_registradas['7_dias']:
                 pruebas_pendientes.append("7 días")
-            if dias >= 14 and puede_pedir_prueba(s14):
+            if dias >= 14 and not pruebas_registradas['14_dias']:
                 pruebas_pendientes.append("14 días")
-            if dias >= 28 and puede_pedir_prueba(s28):
+            if dias >= 28 and not pruebas_registradas['28_dias']:
                 pruebas_pendientes.append("28 días")
 
             if not pruebas_pendientes:
