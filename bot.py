@@ -12,7 +12,6 @@ from telegram.ext import (
 
 # ------------------ CONFIGURACIÓN ------------------
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "AQUI_VA_TU_TOKEN_DEL_BOT"
-CHAT_ID_DESTINO = 521834247  # Cambia por tu chat ID real
 CSV_URL = (
     "https://docs.google.com/spreadsheets/d/1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw/"
     "export?format=csv&id=1s1C0MpybJ7h32N1aPBo0bPlWqwiezlEkFE2q8-OcRIw&gid=0"
@@ -92,11 +91,12 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
-async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE):
+# Ahora esta función recibe el chat_id donde enviar el resumen:
+async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     try:
         df = cargar_csv_drive(CSV_URL)
         if df.empty:
-            await context.bot.send_message(chat_id=CHAT_ID_DESTINO, text="Error al cargar los datos.")
+            await context.bot.send_message(chat_id=chat_id, text="Error al cargar los datos.")
             return
 
         hoy = datetime.now()
@@ -144,19 +144,21 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE):
             bloques.append(bloque_actual)
 
         if not bloques:
-            await context.bot.send_message(chat_id=CHAT_ID_DESTINO, text="✅ No hay pendientes en las pruebas.")
+            await context.bot.send_message(chat_id=chat_id, text="✅ No hay pendientes en las pruebas.")
             return
 
         for i, bloque in enumerate(bloques):
             mensaje = encabezado + bloque if i == 0 else bloque
-            await context.bot.send_message(chat_id=CHAT_ID_DESTINO, text=mensaje, parse_mode="Markdown")
+            await context.bot.send_message(chat_id=chat_id, text=mensaje, parse_mode="Markdown")
     except Exception as e:
         logger.error(f"Error al generar resumen: {e}")
-        await context.bot.send_message(chat_id=CHAT_ID_DESTINO, text=f"Error al generar resumen: {e}")
+        await context.bot.send_message(chat_id=chat_id, text=f"Error al generar resumen: {e}")
 
+# El comando resumen ahora usa el chat_id de la conversación actual
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
     try:
-        await enviar_resumen_directo(context)
+        await enviar_resumen_directo(context, chat_id)
         await update.message.reply_text("✅ Resumen enviado correctamente.")
     except Exception as e:
         logger.error(f"Error en /resumen: {e}")
@@ -170,12 +172,6 @@ def main():
     app.add_handler(CommandHandler("puentes", listar_puentes))
     app.add_handler(CommandHandler("resumen", comando_resumen))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
-
-    # Programar tarea diaria a las 7:00 AM (hora local del servidor)
-    from datetime import time as datetime_time
-    app.job_queue.run_daily(enviar_resumen_directo, time=datetime_time(hour=7, minute=0))
-
-    logger.info("Bot iniciado y job programado a las 7:00 AM.")
 
     app.run_polling()
 
