@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import io
 import os
-from datetime import datetime, time
+from datetime import datetime
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes,
@@ -32,7 +32,13 @@ def cargar_csv_drive(csv_url):
             response = requests.get(csv_url)
             response.raise_for_status()
             df = pd.read_csv(io.StringIO(response.content.decode("utf-8")))
-            df["Puente_normalizado"] = df["Puente"].astype(str).str.strip().str.lower()
+
+            # Normalizar nombres de columna: minúsculas, sin espacios, reemplazar con guiones bajos
+            df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
+
+            # Crear columna normalizada para búsqueda de puentes
+            df["puente_normalizado"] = df["puente"].astype(str).str.strip().str.lower()
+
             cache["df"] = df
             cache["last_update"] = ahora
             logger.info("CSV cargado y cache actualizado.")
@@ -56,10 +62,10 @@ async def avance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if df.empty:
             await update.message.reply_text("Error al cargar los datos.")
             return
-        fila = df[df["Puente_normalizado"] == nombre_usuario]
+        fila = df[df["puente_normalizado"] == nombre_usuario]
         if not fila.empty:
-            nombre_real = fila.iloc[0]["Puente"]
-            avance = fila.iloc[0]["Avance (%)"]
+            nombre_real = fila.iloc[0]["puente"]
+            avance = fila.iloc[0].get("avance_(%)", "Sin dato")
             await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
@@ -71,7 +77,7 @@ async def listar_puentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if df.empty:
         await update.message.reply_text("Error al cargar los datos.")
         return
-    puentes = sorted(df["Puente"].dropna().unique())
+    puentes = sorted(df["puente"].dropna().unique())
     texto = "Puentes disponibles:\n" + "\n".join(f"• {p}" for p in puentes)
     await update.message.reply_text(texto)
 
@@ -83,15 +89,14 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if df.empty:
             await update.message.reply_text("Error al cargar los datos.")
             return
-        fila = df[df["Puente_normalizado"] == nombre_usuario]
+        fila = df[df["puente_normalizado"] == nombre_usuario]
         if not fila.empty:
-            nombre_real = fila.iloc[0]["Puente"]
-            avance = fila.iloc[0]["Avance (%)"]
+            nombre_real = fila.iloc[0]["puente"]
+            avance = fila.iloc[0].get("avance_(%)", "Sin dato")
             await update.message.reply_text(f"El avance de {nombre_real} es {avance}")
         else:
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
-# Ahora esta función recibe el chat_id donde enviar el resumen:
 async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     try:
         df = cargar_csv_drive(CSV_URL)
@@ -106,21 +111,25 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
         bloque_actual = ""
 
         for _, row in df.iterrows():
-            puente = row.get("Puente", "")
-            apoyo = row.get("Apoyo", "")
-            num_elemento = row.get("#Elemento", "")
-            elemento = row.get("Elemento", "")
-            fecha_colado_raw = row.get("Fecha colado", "")
+            puente = row.get("puente", "")
+            apoyo = row.get("apoyo", "")
+            num_elemento = row.get("no._elemento", "")
+            elemento = row.get("elemento", "")
+            fecha_colado_raw = row.get("fecha", "")
             try:
                 fecha_colado = pd.to_datetime(fecha_colado_raw)
             except Exception:
                 continue
             dias = (hoy - fecha_colado).days
-            s7 = row.get("7 DIAS", 0)
-            s14 = row.get("14 DIAS", 0)
-            s28 = row.get("28 DIAS", 0)
+
+            s7 = row.get("7_dias", 0)
+            s14 = row.get("14_dias", 0)
+            s28 = row.get("28_dias", 0)
+
+            # Ignorar filas sin pruebas (suponiendo 0 significa sin prueba)
             if s7 == 0 and s14 == 0 and s28 == 0:
                 continue
+
             pendientes = []
             if pd.isna(s7) and dias >= 7:
                 pendientes.append("7 días")
@@ -128,6 +137,7 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
                 pendientes.append("14 días")
             if pd.isna(s28) and dias >= 28:
                 pendientes.append("28 días")
+
             if pendientes:
                 linea = (
                     f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n"
@@ -154,7 +164,6 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
         logger.error(f"Error al generar resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"Error al generar resumen: {e}")
 
-# El comando resumen ahora usa el chat_id de la conversación actual
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     try:
