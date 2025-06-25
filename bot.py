@@ -99,43 +99,51 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             return
 
         hoy = datetime.now()
+
+        def esta_vacio_o_nan(valor):
+            return valor == "" or pd.isna(valor)
+
         bloques = []
         bloque_actual = ""
 
         for _, row in df.iterrows():
-            try:
-                fecha_colado = pd.to_datetime(row.get("fecha", ""))
-                dias = (hoy - fecha_colado).days
-                fecha_str = fecha_colado.strftime("%d/%m/%y")
-            except:
-                continue
+            fecha_colado = pd.to_datetime(row.get("fecha", ""), errors='coerce')
+            if pd.isna(fecha_colado):
+                continue  # Salta si la fecha es inválida
 
-            s7 = row.get("7_dias", "")
-            s14 = row.get("14_dias", "")
-            s28 = row.get("28_dias", "")
+            dias = (hoy - fecha_colado).days
+            fecha_str = fecha_colado.strftime("%d/%m/%y")
 
+            s7 = row.get("7_dias", None)
+            s14 = row.get("14_dias", None)
+            s28 = row.get("28_dias", None)
+
+            # Si las 3 pruebas están hechas (0), no hay pendientes
             if s7 == 0 and s14 == 0 and s28 == 0:
                 continue
 
             pendientes = []
-            if (s7 == "" or pd.isna(s7)) and dias >= 7:
+            if esta_vacio_o_nan(s7) and dias >= 7:
                 pendientes.append("7 días")
-            if (s14 == "" or pd.isna(s14)) and dias >= 14:
+            if esta_vacio_o_nan(s14) and dias >= 14:
                 pendientes.append("14 días")
-            if (s28 == "" or pd.isna(s28)) and dias >= 28:
+            if esta_vacio_o_nan(s28) and dias >= 28:
                 pendientes.append("28 días")
 
-            if pendientes:
-                linea = (
-                    f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
-                    f"🗒️ *Fecha colado:* {fecha_str}\n"
-                    f"🗒️ *{dias}* días desde colado\n"
-                    f"⏱ Se pueden pedir a: {', '.join(pendientes)}\n\n"
-                )
-                if len(bloque_actual + linea) > 3500:
-                    bloques.append(bloque_actual)
-                    bloque_actual = ""
-                bloque_actual += linea
+            if not pendientes:
+                continue
+
+            linea = (
+                f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
+                f"🗒️ *Fecha colado:* {fecha_str}\n"
+                f"🗒️ *{dias}* días desde colado\n"
+                f"⏱ Se pueden pedir a: {', '.join(pendientes)}\n\n"
+            )
+
+            if len(bloque_actual + linea) > 3500:
+                bloques.append(bloque_actual)
+                bloque_actual = ""
+            bloque_actual += linea
 
         if bloque_actual.strip():
             bloques.append(bloque_actual)
@@ -148,10 +156,11 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
         for i, bloque in enumerate(bloques):
             texto = encabezado + bloque if i == 0 else bloque
             await context.bot.send_message(chat_id=chat_id, text=texto, parse_mode="Markdown")
-        
+
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
 
 
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
