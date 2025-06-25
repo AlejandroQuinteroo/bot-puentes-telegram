@@ -101,16 +101,12 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             return
 
         hoy = datetime.now()
-        fecha_str = hoy.strftime("%d/%m/%Y %H:%M")
-        encabezado = f"📋 *Resumen de pruebas de resistencia:* ({fecha_str})\n\n"
-        bloques = []
-        bloque_actual = ""
+        pendientes_global = []
 
         for _, row in df.iterrows():
             puente = row.get("puente", "")
             apoyo = row.get("apoyo", "")
             num_elemento = row.get("no._elemento", "")
-            elemento = row.get("elemento", "")
             fecha_colado_raw = row.get("fecha", "")
 
             try:
@@ -127,36 +123,18 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             if s7 == 0 and s14 == 0 and s28 == 0:
                 continue
 
-            pendientes = []
-            if (s7 == "" or pd.isna(s7)) and dias >= 7:
-                pendientes.append("7 días")
-            if (s14 == "" or pd.isna(s14)) and dias >= 14:
-                pendientes.append("14 días")
-            if (s28 == "" or pd.isna(s28)) and dias >= 28:
-                pendientes.append("28 días")
+            if ((s7 == "" or pd.isna(s7)) and dias >= 7) or \
+               ((s14 == "" or pd.isna(s14)) and dias >= 14) or \
+               ((s28 == "" or pd.isna(s28)) and dias >= 28):
+                pendientes_global.append(f"{puente} | {apoyo} | {num_elemento}")
 
-            if pendientes:
-                linea = (
-                    f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n"
-                    f"🗒️ *Fecha colado:* {fecha_colado.strftime('%d/%m/%y')}\n"
-                    f"🗒️ *{dias}* días desde colado\n"
-                    f"⏱ Se pueden pedir a: {', '.join(pendientes)}\n\n"
-                )
-                if len(bloque_actual + linea) > 3500:
-                    bloques.append(bloque_actual)
-                    bloque_actual = ""
-                bloque_actual += linea
-
-        if bloque_actual.strip():
-            bloques.append(bloque_actual)
-
-        if not bloques:
-            await context.bot.send_message(chat_id=chat_id, text="✅ No hay pendientes en las pruebas.")
+        if not pendientes_global:
+            await context.bot.send_message(chat_id=chat_id, text="✅ No hay pruebas pendientes.")
             return
 
-        for i, bloque in enumerate(bloques):
-            mensaje = encabezado + bloque if i == 0 else bloque
-            await context.bot.send_message(chat_id=chat_id, text=mensaje, parse_mode="Markdown")
+        encabezado = "*📋 Resumen de elementos con pruebas pendientes:*\n\n"
+        cuerpo = "\n".join(pendientes_global)
+        await context.bot.send_message(chat_id=chat_id, text=encabezado + cuerpo, parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Error al generar resumen: {e}")
