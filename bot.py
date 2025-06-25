@@ -116,9 +116,9 @@ async def enviar_resumen_directo(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             except Exception:
                 continue
             dias = (hoy - fecha_colado).days
-            s7 = row.get("S7", 0)
-            s14 = row.get("S14", 0)
-            s28 = row.get("S28", 0)
+            s7 = row.get("7 DIAS", 0)
+            s14 = row.get("14 DIAS", 0)
+            s28 = row.get("28 DIAS", 0)
             if s7 == 0 and s14 == 0 and s28 == 0:
                 continue
             pendientes = []
