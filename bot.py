@@ -108,6 +108,8 @@ async def enviar_resumen_directo(context, chat_id):
 
         for _, row in df.iterrows():
             puente = row.get("puente", "")
+            apoyo = row.get("apoyo", "")
+            num_elemento = row.get("no._elemento", "")
             fecha_colado = row.get("fecha")
             val7 = row.get("7_dias", "")
             val14 = row.get("14_dias", "")
@@ -116,7 +118,7 @@ async def enviar_resumen_directo(context, chat_id):
             fecha_str = fecha_colado.strftime("%d/%m/%Y") if pd.notna(fecha_colado) else "Sin fecha"
 
             linea = (
-                f"🏗️ *{puente}*\n"
+                f"🏗️ *{puente}* - Apoyo: {apoyo} - No. Elemento: {num_elemento}\n"
                 f"🗒️ Fecha colado: {fecha_str}\n"
                 f"📅 7 días: {val7} | 14 días: {val14} | 28 días: {val28}\n\n"
             )
@@ -137,6 +139,7 @@ async def enviar_resumen_directo(context, chat_id):
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
 
 
 
