@@ -9,6 +9,8 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes,
     MessageHandler, filters
 )
+import pytz
+from datetime import time
 
 # -------- CONFIGURACIÓN --------
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "AQUI_VA_TU_TOKEN_DEL_BOT"
@@ -195,7 +197,7 @@ async def enviar_resumen_a_todos(context):
 
 def programar_resumen_diario(app):
     zona = pytz.timezone("America/Mexico_City")
-    hora_envio = time(hour=13, minute=15, tzinfo=zona)
+    hora_envio = time(hour=13, minute=22, tzinfo=zona)
 
     app.job_queue.run_daily(enviar_resumen_a_todos, hora_envio, name="Resumen diario")
 
