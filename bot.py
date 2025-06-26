@@ -120,7 +120,7 @@ async def enviar_resumen_directo(context, chat_id):
             s7 = row.get("7_dias")
 
             # Solo pedimos prueba de 7 días si no tiene valor y ya pasaron 7 días
-            if (s7 == "" or s7 is None) and dias >= 7:
+            if dias >= 7:
                 linea = (
                     f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n"
                     f"🗒️ *Fecha colado:* {fecha_colado_str}\n"
