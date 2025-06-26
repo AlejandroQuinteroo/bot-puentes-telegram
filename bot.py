@@ -93,7 +93,6 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
 # -------- RESUMEN --------
-
 async def enviar_resumen_directo(context, chat_id):
     try:
         df = cargar_csv_drive(CSV_URL)
@@ -105,21 +104,8 @@ async def enviar_resumen_directo(context, chat_id):
         hoy = datetime.now()
         encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
 
-        # ---- Imprimir toda la lista de datos primero (conversión ya hecha en carga) ----
-        print("🗃️ Lista completa de elementos con fechas y valores:\n")
-        for _, row in df.iterrows():
-            fecha_colado = row['fecha']
-            if pd.isna(fecha_colado):
-                fecha_str = "Fecha inválida"
-            else:
-                fecha_str = fecha_colado.strftime('%d/%m/%Y')
-
-            print(f"Puente: {row['puente']}, Apoyo: {row['apoyo']}, Elemento: {row['elemento']} {row['no._elemento']}")
-            print(f"Fecha colado: {fecha_str}")
-            print(f"7 días: {row['7_dias']}, 14 días: {row['14_dias']}, 28 días: {row['28_dias']}")
-            print("-" * 40)
-
-        print("\n\n")  # Separación clara antes del resumen
+        def valor_vacio_o_nulo(val):
+            return val is None or val == "" or pd.isna(val)
 
         bloques = []
         bloque_actual = ""
@@ -129,7 +115,7 @@ async def enviar_resumen_directo(context, chat_id):
             apoyo = row.get("apoyo", "")
             num_elemento = row.get("no._elemento", "")
             elemento = row.get("elemento", "")
-            fecha_colado = row['fecha']  # Ya es datetime o NaT
+            fecha_colado = row['fecha']  # datetime o NaT
 
             if pd.isna(fecha_colado):
                 continue
@@ -143,11 +129,11 @@ async def enviar_resumen_directo(context, chat_id):
 
             recomendaciones = ""
 
-            if (val7 in [None, "", 0] or pd.isna(val7)) and dias >= 7:
+            if valor_vacio_o_nulo(val7) and dias >= 7:
                 recomendaciones += f"Pedir prueba de 7 días ({dias} días), "
-            if (val14 in [None, "", 0] or pd.isna(val14)) and dias >= 14:
+            if valor_vacio_o_nulo(val14) and dias >= 14:
                 recomendaciones += f"Pedir prueba de 14 días ({dias} días), "
-            if (val28 in [None, "", 0] or pd.isna(val28)) and dias >= 28:
+            if valor_vacio_o_nulo(val28) and dias >= 28:
                 recomendaciones += f"Pedir prueba de 28 días ({dias} días), "
 
             if not recomendaciones:
@@ -172,7 +158,6 @@ async def enviar_resumen_directo(context, chat_id):
             await context.bot.send_message(chat_id=chat_id, text="✅ No hay pruebas pendientes por solicitar.")
             return
 
-        # Enviar resumen en bloques por Telegram
         for i, bloque in enumerate(bloques):
             texto = encabezado + bloque if i == 0 else bloque
             await context.bot.send_message(chat_id=chat_id, text=texto, parse_mode="Markdown")
@@ -180,6 +165,13 @@ async def enviar_resumen_directo(context, chat_id):
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
+
+
+
+
+
+
 
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
