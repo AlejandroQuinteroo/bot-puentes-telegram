@@ -197,7 +197,7 @@ async def enviar_resumen_a_todos(context):
 
 def programar_resumen_diario(app):
     zona = pytz.timezone("America/Mexico_City")
-    hora_envio = time(hour=13, minute=22, tzinfo=zona)
+    hora_envio = time(hour=13, minute=55, tzinfo=zona)
 
     app.job_queue.run_daily(enviar_resumen_a_todos, hora_envio, name="Resumen diario")
 
