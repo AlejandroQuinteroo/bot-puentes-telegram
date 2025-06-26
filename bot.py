@@ -95,26 +95,25 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def enviar_resumen_directo(context, chat_id):
     try:
-        df = df_prueba
+        df = cargar_csv_drive(CSV_URL)
 
         if df.empty:
-            print("❌ No se pudo cargar el archivo.")
+            await context.bot.send_message(chat_id=chat_id, text="❌ No se pudo cargar el archivo.")
             return
 
         hoy = datetime.now()
         encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
 
-        # ---- Imprimir toda la lista de datos primero ----
+        # ---- Imprimir toda la lista de datos primero (solo para consola) ----
         print("🗃️ Lista completa de elementos con fechas y valores:\n")
         for _, row in df.iterrows():
             print(f"Puente: {row['puente']}, Apoyo: {row['apoyo']}, Elemento: {row['elemento']} {row['no._elemento']}")
             print(f"Fecha colado: {row['fecha'].strftime('%d/%m/%Y')}")
             print(f"7 días: {row['7_dias']}, 14 días: {row['14_dias']}, 28 días: {row['28_dias']}")
             print("-" * 40)
-        
+
         print("\n\n")  # Separación clara antes del resumen
 
-        # ---- Preparar resumen con recomendaciones ----
         bloques = []
         bloque_actual = ""
 
@@ -163,17 +162,18 @@ async def enviar_resumen_directo(context, chat_id):
             bloques.append(bloque_actual)
 
         if not bloques:
-            print("✅ No hay pruebas pendientes por solicitar.")
+            await context.bot.send_message(chat_id=chat_id, text="✅ No hay pruebas pendientes por solicitar.")
             return
 
-        # Imprimir resumen
+        # Enviar resumen en bloques por Telegram
         for i, bloque in enumerate(bloques):
             texto = encabezado + bloque if i == 0 else bloque
-            print(texto)
+            await context.bot.send_message(chat_id=chat_id, text=texto, parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
-        print(f"❌ Error al generar el resumen:\n{e}")
+        await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
 
 
 
