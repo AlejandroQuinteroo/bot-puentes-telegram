@@ -92,7 +92,6 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # -------- RESUMEN --------
 
-
 async def enviar_resumen_directo(context, chat_id):
     try:
         df = cargar_csv_drive(CSV_URL)
@@ -124,19 +123,19 @@ async def enviar_resumen_directo(context, chat_id):
             s14 = row.get("14_dias")
             s28 = row.get("28_dias")
 
-            # Verificar si alguna prueba ya tiene resultado
+            # Verificamos si alguna prueba ya tiene resultado
             alguna_prueba_registrada = any([tiene_resultado(s7), tiene_resultado(s14), tiene_resultado(s28)])
 
             if alguna_prueba_registrada:
-                # Si alguna está registrada, no pedir pruebas pendientes
+                # Si hay resultados, no pedir pruebas
                 continue
 
             pruebas_pendientes = []
-            if s7 in (None, "", 0) and dias >= 7:
+            if (s7 in (None, "", 0)) and dias >= 7:
                 pruebas_pendientes.append("7 días")
-            if s14 in (None, "", 0) and dias >= 14:
+            if (s14 in (None, "", 0)) and dias >= 14:
                 pruebas_pendientes.append("14 días")
-            if s28 in (None, "", 0) and dias >= 28:
+            if (s28 in (None, "", 0)) and dias >= 28:
                 pruebas_pendientes.append("28 días")
 
             if pruebas_pendientes:
@@ -148,7 +147,7 @@ async def enviar_resumen_directo(context, chat_id):
                     f"⏱ Se pueden pedir pruebas de: {texto_pruebas}\n\n"
                 )
             else:
-                # Ninguna prueba pendiente, pero faltan días para 7 (porque ninguna prueba registrada)
+                # Si no hay pruebas pendientes y faltan días para 7 (ningún resultado aún)
                 if dias < 7:
                     faltan = 7 - dias
                     linea = (
@@ -158,7 +157,7 @@ async def enviar_resumen_directo(context, chat_id):
                         f"⏱ Faltan {faltan} días para poder pedir pruebas\n\n"
                     )
                 else:
-                    # No hay pruebas pendientes y tiempo mínimo cumplido, no mostrar nada
+                    # No hay pruebas pendientes y tiempo cumplido, no mostrar nada
                     continue
 
             if len(bloque_actual + linea) > 3500:
@@ -180,6 +179,7 @@ async def enviar_resumen_directo(context, chat_id):
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
 
 
 
