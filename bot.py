@@ -152,7 +152,7 @@ async def enviar_resumen_directo(context, chat_id):
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
 
-
+  
 
 
 
