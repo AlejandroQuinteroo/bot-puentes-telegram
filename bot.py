@@ -103,7 +103,9 @@ async def enviar_resumen_directo(context, chat_id):
             await context.bot.send_message(chat_id=chat_id, text="❌ No se pudo cargar el archivo.")
             return
 
-        hoy = datetime.now()
+        zona = pytz.timezone("America/Hermosillo")
+        hoy = datetime.now(zona)
+        
         encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
 
         bloques = []
@@ -196,8 +198,8 @@ async def enviar_resumen_a_todos(context):
             logger.error(f"Error enviando resumen a {chat_id}: {e}")
 
 def programar_resumen_diario(app):
-    zona = pytz.timezone("America/Mexico_City")
-    hora_envio = time(hour=13, minute=55, tzinfo=zona)
+    zona = pytz.timezone("America/Hermosillo")
+    hora_envio = time(hour=7, minute=55, tzinfo=zona)
 
     app.job_queue.run_daily(enviar_resumen_a_todos, hora_envio, name="Resumen diario")
 
