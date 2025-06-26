@@ -91,6 +91,11 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"No encontré información para '{nombre_usuario.title()}'")
 
 # -------- RESUMEN --------
+from datetime import datetime
+import pandas as pd
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def enviar_resumen_directo(context, chat_id):
     try:
@@ -119,8 +124,8 @@ async def enviar_resumen_directo(context, chat_id):
 
             s7 = row.get("7_dias")
 
-            # Solo pedimos prueba de 7 días si no tiene valor y ya pasaron 7 días
-            if dias >= 7:
+            # Solo pedimos prueba si pasaron 7 días y 7_dias está vacío, nulo o 0
+            if dias >= 7 and (s7 is None or s7 == 0 or s7 == "" or pd.isna(s7)):
                 linea = (
                     f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n"
                     f"🗒️ *Fecha colado:* {fecha_colado_str}\n"
@@ -128,7 +133,6 @@ async def enviar_resumen_directo(context, chat_id):
                     f"⏱ Se puede pedir prueba de: 7 días\n\n"
                 )
             else:
-                # Si faltan días para 7 o ya está la prueba, no mostramos nada
                 continue
 
             if len(bloque_actual + linea) > 3500:
@@ -152,7 +156,6 @@ async def enviar_resumen_directo(context, chat_id):
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
 
-  
 
 
 
