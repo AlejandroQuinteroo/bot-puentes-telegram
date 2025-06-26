@@ -102,67 +102,64 @@ async def enviar_resumen_directo(context, chat_id):
         hoy = datetime.now()
         encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
 
-        def tiene_resultado(valor):
-            if valor is None:
-                return False
-            val_str = str(valor).strip().lower()
-            return val_str not in ("", "0", "none", "nan")
-
         bloques = []
         bloque_actual = ""
 
         for _, row in df.iterrows():
+            # Extraer campos
+            puente = row.get("puente", "")
+            apoyo = row.get("apoyo", "")
+            num_elemento = row.get("no._elemento", "")
+            elemento = row.get("elemento", "")
             fecha_colado = pd.to_datetime(row.get("fecha", ""), errors='coerce')
             if pd.isna(fecha_colado):
                 continue
 
             dias = (hoy - fecha_colado).days
-            fecha_str = fecha_colado.strftime("%d/%m/%y")
+            fecha_colado_str = fecha_colado.strftime("%d/%m/%y")
 
             s7 = row.get("7_dias")
             s14 = row.get("14_dias")
             s28 = row.get("28_dias")
 
-            # Verificamos si alguna prueba ya tiene resultado
-            alguna_prueba_registrada = any([tiene_resultado(s7), tiene_resultado(s14), tiene_resultado(s28)])
-
-            if alguna_prueba_registrada:
-                # Si hay resultados, no pedir pruebas
+            # Ignorar fila si las tres pruebas son 0 (numéricamente)
+            if all(val == 0 for val in (s7, s14, s28)):
                 continue
 
-            pruebas_pendientes = []
-            if (s7 in (None, "", 0)) and dias >= 7:
-                pruebas_pendientes.append("7 días")
-            if (s14 in (None, "", 0)) and dias >= 14:
-                pruebas_pendientes.append("14 días")
-            if (s28 in (None, "", 0)) and dias >= 28:
-                pruebas_pendientes.append("28 días")
+            # Considerar prueba pendiente si está vacía o None, pero no cero
+            pendientes = []
+            if (s7 in ("", None)) and dias >= 7:
+                pendientes.append("7 días")
+            if (s14 in ("", None)) and dias >= 14:
+                pendientes.append("14 días")
+            if (s28 in ("", None)) and dias >= 28:
+                pendientes.append("28 días")
 
-            if pruebas_pendientes:
-                texto_pruebas = ", ".join(pruebas_pendientes)
+            if pendientes:
                 linea = (
-                    f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
-                    f"🗒️ *Fecha colado:* {fecha_str}\n"
+                    f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n"
+                    f"🗒️ *Fecha colado:* {fecha_colado_str}\n"
                     f"🗒️ *{dias}* días desde colado\n"
-                    f"⏱ Se pueden pedir pruebas de: {texto_pruebas}\n\n"
+                    f"⏱ Se pueden pedir pruebas de: {', '.join(pendientes)}\n\n"
                 )
             else:
-                # Si no hay pruebas pendientes y faltan días para 7 (ningún resultado aún)
+                # Si no hay pendientes y días < 7, indicar cuánto falta
                 if dias < 7:
                     faltan = 7 - dias
                     linea = (
-                        f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
-                        f"🗒️ *Fecha colado:* {fecha_str}\n"
+                        f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n"
+                        f"🗒️ *Fecha colado:* {fecha_colado_str}\n"
                         f"🗒️ *{dias}* días desde colado\n"
                         f"⏱ Faltan {faltan} días para poder pedir pruebas\n\n"
                     )
                 else:
-                    # No hay pruebas pendientes y tiempo cumplido, no mostrar nada
+                    # No hay pruebas pendientes, ni días faltantes, no mostrar
                     continue
 
             if len(bloque_actual + linea) > 3500:
                 bloques.append(bloque_actual)
                 bloque_actual = ""
+
             bloque_actual += linea
 
         if bloque_actual.strip():
