@@ -5,3 +5,6 @@ openpyxl
 gspread 
 google-auth
 pytz
+python-telegram-bot[job-queue]
+apscheduler
+JobQueue
