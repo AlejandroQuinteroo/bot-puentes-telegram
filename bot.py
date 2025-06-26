@@ -106,7 +106,6 @@ async def enviar_resumen_directo(context, chat_id):
         bloque_actual = ""
 
         for _, row in df.iterrows():
-            # Extraer campos
             puente = row.get("puente", "")
             apoyo = row.get("apoyo", "")
             num_elemento = row.get("no._elemento", "")
@@ -119,42 +118,18 @@ async def enviar_resumen_directo(context, chat_id):
             fecha_colado_str = fecha_colado.strftime("%d/%m/%y")
 
             s7 = row.get("7_dias")
-            s14 = row.get("14_dias")
-            s28 = row.get("28_dias")
 
-            # Ignorar fila si las tres pruebas son 0 (numéricamente)
-            if all(val == 0 for val in (s7, s14, s28)):
-                continue
-
-            # Considerar prueba pendiente si está vacía o None, pero no cero
-            pendientes = []
-            if (s7 in ("", None)) and dias >= 7:
-                pendientes.append("7 días")
-            if (s14 in ("", None)) and dias >= 14:
-                pendientes.append("14 días")
-            if (s28 in ("", None)) and dias >= 28:
-                pendientes.append("28 días")
-
-            if pendientes:
+            # Solo pedimos prueba de 7 días si no tiene valor y ya pasaron 7 días
+            if (s7 == "" or s7 is None) and dias >= 7:
                 linea = (
                     f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n"
                     f"🗒️ *Fecha colado:* {fecha_colado_str}\n"
                     f"🗒️ *{dias}* días desde colado\n"
-                    f"⏱ Se pueden pedir pruebas de: {', '.join(pendientes)}\n\n"
+                    f"⏱ Se puede pedir prueba de: 7 días\n\n"
                 )
             else:
-                # Si no hay pendientes y días < 7, indicar cuánto falta
-                if dias < 7:
-                    faltan = 7 - dias
-                    linea = (
-                        f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n"
-                        f"🗒️ *Fecha colado:* {fecha_colado_str}\n"
-                        f"🗒️ *{dias}* días desde colado\n"
-                        f"⏱ Faltan {faltan} días para poder pedir pruebas\n\n"
-                    )
-                else:
-                    # No hay pruebas pendientes, ni días faltantes, no mostrar
-                    continue
+                # Si faltan días para 7 o ya está la prueba, no mostramos nada
+                continue
 
             if len(bloque_actual + linea) > 3500:
                 bloques.append(bloque_actual)
@@ -166,7 +141,7 @@ async def enviar_resumen_directo(context, chat_id):
             bloques.append(bloque_actual)
 
         if not bloques:
-            await context.bot.send_message(chat_id=chat_id, text="✅ No hay pruebas pendientes.")
+            await context.bot.send_message(chat_id=chat_id, text="✅ No hay pruebas pendientes de 7 días.")
             return
 
         for i, bloque in enumerate(bloques):
