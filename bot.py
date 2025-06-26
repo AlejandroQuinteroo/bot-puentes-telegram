@@ -92,6 +92,7 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # -------- RESUMEN --------
 
+
 async def enviar_resumen_directo(context, chat_id):
     try:
         df = cargar_csv_drive(CSV_URL)
@@ -102,10 +103,10 @@ async def enviar_resumen_directo(context, chat_id):
         hoy = datetime.now()
         encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
 
-        def esta_registrado(valor_celda):
-            if valor_celda is None:
+        def tiene_resultado(valor):
+            if valor is None:
                 return False
-            val_str = str(valor_celda).strip().lower()
+            val_str = str(valor).strip().lower()
             return val_str not in ("", "0", "none", "nan")
 
         bloques = []
@@ -123,28 +124,42 @@ async def enviar_resumen_directo(context, chat_id):
             s14 = row.get("14_dias")
             s28 = row.get("28_dias")
 
-            if esta_registrado(s7) and esta_registrado(s14) and esta_registrado(s28):
-                continue  # Todas las pruebas ya registradas, no enviar
+            # Verificar si alguna prueba ya tiene resultado
+            alguna_prueba_registrada = any([tiene_resultado(s7), tiene_resultado(s14), tiene_resultado(s28)])
 
-            pruebas_pendientes = []
-            if dias >= 7 and not esta_registrado(s7):
-                pruebas_pendientes.append("7 días")
-            if dias >= 14 and not esta_registrado(s14):
-                pruebas_pendientes.append("14 días")
-            if dias >= 28 and not esta_registrado(s28):
-                pruebas_pendientes.append("28 días")
-
-            if not pruebas_pendientes:
+            if alguna_prueba_registrada:
+                # Si alguna está registrada, no pedir pruebas pendientes
                 continue
 
-            texto_pruebas = ", ".join(pruebas_pendientes)
+            pruebas_pendientes = []
+            if s7 in (None, "", 0) and dias >= 7:
+                pruebas_pendientes.append("7 días")
+            if s14 in (None, "", 0) and dias >= 14:
+                pruebas_pendientes.append("14 días")
+            if s28 in (None, "", 0) and dias >= 28:
+                pruebas_pendientes.append("28 días")
 
-            linea = (
-                f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
-                f"🗒️ *Fecha colado:* {fecha_str}\n"
-                f"🗒️ *{dias}* días desde colado\n"
-                f"⏱ Se pueden pedir pruebas de: {texto_pruebas}\n\n"
-            )
+            if pruebas_pendientes:
+                texto_pruebas = ", ".join(pruebas_pendientes)
+                linea = (
+                    f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
+                    f"🗒️ *Fecha colado:* {fecha_str}\n"
+                    f"🗒️ *{dias}* días desde colado\n"
+                    f"⏱ Se pueden pedir pruebas de: {texto_pruebas}\n\n"
+                )
+            else:
+                # Ninguna prueba pendiente, pero faltan días para 7 (porque ninguna prueba registrada)
+                if dias < 7:
+                    faltan = 7 - dias
+                    linea = (
+                        f"🏗️ *{row.get('puente','')}* - Eje: {row.get('apoyo','')} - {row.get('elemento','')} {row.get('no._elemento','')}\n"
+                        f"🗒️ *Fecha colado:* {fecha_str}\n"
+                        f"🗒️ *{dias}* días desde colado\n"
+                        f"⏱ Faltan {faltan} días para poder pedir pruebas\n\n"
+                    )
+                else:
+                    # No hay pruebas pendientes y tiempo mínimo cumplido, no mostrar nada
+                    continue
 
             if len(bloque_actual + linea) > 3500:
                 bloques.append(bloque_actual)
@@ -165,6 +180,7 @@ async def enviar_resumen_directo(context, chat_id):
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
 
 
 
