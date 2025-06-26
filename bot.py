@@ -101,48 +101,24 @@ async def enviar_resumen_directo(context, chat_id):
             await context.bot.send_message(chat_id=chat_id, text="❌ No se pudo cargar el archivo.")
             return
 
-        hoy = datetime.now()
-        encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
+        encabezado = "📋 *Resumen completo de pruebas de resistencia:*\n\n"
 
         bloques = []
         bloque_actual = ""
 
         for _, row in df.iterrows():
             puente = row.get("puente", "")
-            apoyo = row.get("apoyo", "")
-            num_elemento = row.get("no._elemento", "")
-            elemento = row.get("elemento", "")
-            fecha_colado = row['fecha']
+            fecha_colado = row.get("fecha")
+            val7 = row.get("7_dias", "")
+            val14 = row.get("14_dias", "")
+            val28 = row.get("28_dias", "")
 
-            if pd.isna(fecha_colado):
-                continue
-
-            fecha_colado_7 = fecha_colado + pd.Timedelta(days=7)
-            fecha_colado_14 = fecha_colado + pd.Timedelta(days=14)
-            fecha_colado_28 = fecha_colado + pd.Timedelta(days=28)
-            dias_transcurridos = (hoy - fecha_colado).days
-            fecha_colado_str = fecha_colado.strftime("%d/%m/%y")
-
-            val7 = row.get("7_dias")
-            val14 = row.get("14_dias")
-            val28 = row.get("28_dias")
-
-            recomendaciones = ""
-
-            if hoy >= fecha_colado_7:
-                recomendaciones += f"Pedir prueba de 7 días ({dias_transcurridos} días), "
-            if hoy >= fecha_colado_14:
-                recomendaciones += f"Pedir prueba de 14 días ({dias_transcurridos} días), "
-            if hoy >= fecha_colado_28:
-                recomendaciones += f"Pedir prueba de 28 días ({dias_transcurridos} días), "
-
-            if not recomendaciones:
-                continue
+            fecha_str = fecha_colado.strftime("%d/%m/%Y") if pd.notna(fecha_colado) else "Sin fecha"
 
             linea = (
-                f"🏗️ *{puente}* - Eje: {apoyo} - {elemento} {num_elemento}\n"
-                f"🗒️ *Fecha colado:* {fecha_colado_str}\n"
-                f"⏱ {recomendaciones.strip(', ')}\n\n"
+                f"🏗️ *{puente}*\n"
+                f"🗒️ Fecha colado: {fecha_str}\n"
+                f"📅 7 días: {val7} | 14 días: {val14} | 28 días: {val28}\n\n"
             )
 
             if len(bloque_actual + linea) > 3500:
@@ -154,10 +130,6 @@ async def enviar_resumen_directo(context, chat_id):
         if bloque_actual.strip():
             bloques.append(bloque_actual)
 
-        if not bloques:
-            await context.bot.send_message(chat_id=chat_id, text="✅ No hay pruebas pendientes por solicitar.")
-            return
-
         for i, bloque in enumerate(bloques):
             texto = encabezado + bloque if i == 0 else bloque
             await context.bot.send_message(chat_id=chat_id, text=texto, parse_mode="Markdown")
@@ -165,7 +137,6 @@ async def enviar_resumen_directo(context, chat_id):
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
-
 
 
 
