@@ -130,9 +130,8 @@ async def enviar_resumen_directo(context, chat_id):
                 recomendaciones += f"Pedir prueba de 7 días ({dias} días), "
             if val14 in [None, ""] and dias >= 14:
                 recomendaciones += f"Pedir prueba de 14 días ({dias} días), "
-        if val28 in [None, ""] and dias >= 28:
-            recomendaciones += f"Pedir prueba de 28 días ({dias} días), "
-
+            if val28 in [None, ""] and dias >= 28:
+                recomendaciones += f"Pedir prueba de 28 días ({dias} días), "
 
             if not recomendaciones:
                 continue
@@ -163,13 +162,6 @@ async def enviar_resumen_directo(context, chat_id):
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
-
-
-
-
-
-
-
 
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
