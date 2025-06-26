@@ -104,9 +104,6 @@ async def enviar_resumen_directo(context, chat_id):
         hoy = datetime.now()
         encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
 
-        def valor_vacio_o_nulo(val):
-            return val is None or val == "" or pd.isna(val)
-
         bloques = []
         bloque_actual = ""
 
@@ -129,11 +126,11 @@ async def enviar_resumen_directo(context, chat_id):
 
             recomendaciones = ""
 
-            if valor_vacio_o_nulo(val7) and dias >= 7:
+            if (val7 in [None, "", 0] or pd.isna(val7)) and dias >= 7:
                 recomendaciones += f"Pedir prueba de 7 días ({dias} días), "
-            if valor_vacio_o_nulo(val14) and dias >= 14:
+            if (val14 in [None, "", 0] or pd.isna(val14)) and dias >= 14:
                 recomendaciones += f"Pedir prueba de 14 días ({dias} días), "
-            if valor_vacio_o_nulo(val28) and dias >= 28:
+            if (val28 in [None, "", 0] or pd.isna(val28)) and dias >= 28:
                 recomendaciones += f"Pedir prueba de 28 días ({dias} días), "
 
             if not recomendaciones:
