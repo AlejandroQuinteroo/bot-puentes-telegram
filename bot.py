@@ -15,7 +15,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN") or "AQUI_VA_TU_TOKEN_DEL_BOT"
 CSV_URL = "https://docs.google.com/spreadsheets/d/1cscTPpqlYWp9qXYaG7ERN_iCKx2_Qg_ygJB-67GHGXs/export?format=csv&gid=0"
 
 cache = {"df": None, "last_update": 0}
-CACHE_DURATION = 300  # segundos
+CACHE_DURATION = 20  # segundos
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -175,10 +175,38 @@ async def enviar_resumen_directo(context, chat_id):
 
 
 
+
+
+chats_para_resumen = set()
+
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    chats_para_resumen.add(chat_id)  # Guardar chat_id para resumen diario
     await enviar_resumen_directo(context, chat_id)
-    await update.message.reply_text("✅ Resumen enviado correctamente.")
+    await update.message.reply_text("✅ Resumen enviado y programado para enviarse diario a las 7am en este chat.")
+
+# Job diario
+async def enviar_resumen_a_todos(context):
+    for chat_id in chats_para_resumen:
+        try:
+            await enviar_resumen_directo(context, chat_id)
+        except Exception as e:
+            logger.error(f"Error enviando resumen a {chat_id}: {e}")
+
+def programar_resumen_diario(app):
+    zona = pytz.timezone("America/Mexico_City")
+    hora_envio = time(hour=13, minute=10, tzinfo=zona)
+
+    app.job_queue.run_daily(enviar_resumen_a_todos, hora_envio, name="Resumen diario")
+
+
+
+
+
+
+
+
+
 
 # -------- INICIO --------
 def main():
@@ -190,8 +218,8 @@ def main():
     app.add_handler(CommandHandler("resumen", comando_resumen))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), mensaje_texto))
 
+    programar_resumen_diario(app)
+
     logger.info("Bot iniciado.")
     app.run_polling()
 
-if __name__ == "__main__":
-    main()
