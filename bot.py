@@ -31,6 +31,8 @@ def cargar_csv_drive(csv_url):
             df = pd.read_csv(io.StringIO(response.content.decode("utf-8")))
             df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
             df["puente_normalizado"] = df["puente"].astype(str).str.strip().str.lower()
+            # Convertir 'fecha' a datetime para evitar errores
+            df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce')
             cache["df"] = df
             cache["last_update"] = ahora
             logger.info("CSV cargado y cache actualizado.")
@@ -92,7 +94,6 @@ async def mensaje_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # -------- RESUMEN --------
 
-
 async def enviar_resumen_directo(context, chat_id):
     try:
         df = cargar_csv_drive(CSV_URL)
@@ -104,11 +105,17 @@ async def enviar_resumen_directo(context, chat_id):
         hoy = datetime.now()
         encabezado = f"📋 *Resumen de pruebas de resistencia:* ({hoy.strftime('%d/%m/%Y %H:%M')})\n\n"
 
-        # ---- Imprimir toda la lista de datos primero (solo para consola) ----
+        # ---- Imprimir toda la lista de datos primero (conversión ya hecha en carga) ----
         print("🗃️ Lista completa de elementos con fechas y valores:\n")
         for _, row in df.iterrows():
+            fecha_colado = row['fecha']
+            if pd.isna(fecha_colado):
+                fecha_str = "Fecha inválida"
+            else:
+                fecha_str = fecha_colado.strftime('%d/%m/%Y')
+
             print(f"Puente: {row['puente']}, Apoyo: {row['apoyo']}, Elemento: {row['elemento']} {row['no._elemento']}")
-            print(f"Fecha colado: {row['fecha'].strftime('%d/%m/%Y')}")
+            print(f"Fecha colado: {fecha_str}")
             print(f"7 días: {row['7_dias']}, 14 días: {row['14_dias']}, 28 días: {row['28_dias']}")
             print("-" * 40)
 
@@ -122,7 +129,7 @@ async def enviar_resumen_directo(context, chat_id):
             apoyo = row.get("apoyo", "")
             num_elemento = row.get("no._elemento", "")
             elemento = row.get("elemento", "")
-            fecha_colado = pd.to_datetime(row.get("fecha", ""), errors='coerce')
+            fecha_colado = row['fecha']  # Ya es datetime o NaT
 
             if pd.isna(fecha_colado):
                 continue
@@ -173,11 +180,6 @@ async def enviar_resumen_directo(context, chat_id):
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
-
-
-
-
-
 
 async def comando_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
