@@ -117,7 +117,10 @@ async def enviar_resumen_directo(context, chat_id):
             if pd.isna(fecha_colado):
                 continue
 
-            dias = (hoy - fecha_colado).days
+            fecha_colado_7 = fecha_colado + pd.Timedelta(days=7)
+            fecha_colado_14 = fecha_colado + pd.Timedelta(days=14)
+            fecha_colado_28 = fecha_colado + pd.Timedelta(days=28)
+            dias_transcurridos = (hoy - fecha_colado).days
             fecha_colado_str = fecha_colado.strftime("%d/%m/%y")
 
             val7 = row.get("7_dias")
@@ -126,12 +129,12 @@ async def enviar_resumen_directo(context, chat_id):
 
             recomendaciones = ""
 
-            if dias >= 7 and (val7 is None or val7 == ""):
-                recomendaciones += f"Pedir prueba de 7 días ({dias} días), "
-            if dias >= 14 and (val14 is None or val14 == ""):
-                recomendaciones += f"Pedir prueba de 14 días ({dias} días), "
-            if dias >= 28 and (val28 is None or val28 == ""):
-                recomendaciones += f"Pedir prueba de 28 días ({dias} días), "
+            if hoy >= fecha_colado_7 and (val7 is None or val7 == ""):
+                recomendaciones += f"Pedir prueba de 7 días ({dias_transcurridos} días), "
+            if hoy >= fecha_colado_14 and (val14 is None or val14 == ""):
+                recomendaciones += f"Pedir prueba de 14 días ({dias_transcurridos} días), "
+            if hoy >= fecha_colado_28 and (val28 is None or val28 == ""):
+                recomendaciones += f"Pedir prueba de 28 días ({dias_transcurridos} días), "
 
             if not recomendaciones:
                 continue
@@ -162,6 +165,10 @@ async def enviar_resumen_directo(context, chat_id):
     except Exception as e:
         logger.error(f"Error en resumen: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Error al generar el resumen:\n{e}")
+
+
+
+
 
 
 
