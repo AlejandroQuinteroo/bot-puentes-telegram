@@ -129,11 +129,11 @@ async def enviar_resumen_directo(context, chat_id):
 
             recomendaciones = ""
 
-            if hoy >= fecha_colado_7 and (val7 is None or val7 == ""):
+            if hoy >= fecha_colado_7:
                 recomendaciones += f"Pedir prueba de 7 días ({dias_transcurridos} días), "
-            if hoy >= fecha_colado_14 and (val14 is None or val14 == ""):
+            if hoy >= fecha_colado_14:
                 recomendaciones += f"Pedir prueba de 14 días ({dias_transcurridos} días), "
-            if hoy >= fecha_colado_28 and (val28 is None or val28 == ""):
+            if hoy >= fecha_colado_28:
                 recomendaciones += f"Pedir prueba de 28 días ({dias_transcurridos} días), "
 
             if not recomendaciones:
